@@ -74,16 +74,16 @@ impl MioStreams {
             socket_factory,
         };
         if let Some(tun) = tun {
-            ret.register_stream(StreamId::TUN_STREAM_ID, tun, mio::Interest::READABLE)?;
+            ret.register_stream(StreamId::TUN_STREAM_ID, tun, mio::Interest::READABLE, false)?;
         }
         Ok(ret)
     }
 
-    fn register_stream(&mut self, stream_id: StreamId, mut stream: Box<dyn MioStream>, interest: mio::Interest) -> io::Result<()> {
+    fn register_stream(&mut self, stream_id: StreamId, mut stream: Box<dyn MioStream>, interest: mio::Interest, log_when_connected: bool) -> io::Result<()> {
         let token = Token(self.next_token);
         self.next_token += 1;
         self.poll.registry().register(stream.source(), token, interest)?;
-        self.streams.push(MioStreamInfo { stream, token, stream_id, interest });
+        self.streams.push(MioStreamInfo { stream, token, stream_id, interest, log_when_connected });
         Ok(())
     }
 }
@@ -96,13 +96,13 @@ impl Streams for MioStreams {
 
     fn open_new_tcp_stream(&mut self, stream_id: StreamId, addr: SocketAddr) -> io::Result<()> {
         let stream = self.socket_factory.new_tcp_socket(addr)?;
-        self.register_stream(stream_id, stream, mio::Interest::READABLE | mio::Interest::WRITABLE)?;
+        self.register_stream(stream_id, stream, mio::Interest::READABLE | mio::Interest::WRITABLE, true)?;
         Ok(())
     }
 
     fn open_new_udp_stream(&mut self, stream_id: StreamId, addr: SocketAddr) -> io::Result<()> {
         let stream = self.socket_factory.new_udp_socket(addr)?;
-        self.register_stream(stream_id, stream, mio::Interest::READABLE)?;
+        self.register_stream(stream_id, stream, mio::Interest::READABLE, false)?;
         Ok(())
     }
 
@@ -124,9 +124,13 @@ impl Streams for MioStreams {
             if token == POLL_WAKER_TOKEN {
                 log::info!("poll waker triggered");
             } else {
-                let stream = get_stream_by_token(&self.streams, token);
+                let stream = get_stream_by_token(&mut self.streams, token);
                 if let Some(stream) = stream {
                     let stream_id = stream.stream_id;
+                    if stream.log_when_connected && event.is_writable() {
+                        stream.log_when_connected = false;
+                        log::info!("stream {:?} connected", stream_id);
+                    }
                     ret.push(
                         PollResult {
                             stream_id,
@@ -166,7 +170,7 @@ impl Streams for MioStreams {
             TunStreamInfo::TunFd(fd) => Some(Box::new(TunStreamUnixType::new(fd))),
         };
         if let Some(tun) = tun {
-            self.register_stream(StreamId::TUN_STREAM_ID, tun, mio::Interest::READABLE)?
+            self.register_stream(StreamId::TUN_STREAM_ID, tun, mio::Interest::READABLE, false)?
         }
         Ok(())
     }
@@ -189,14 +193,15 @@ fn get_stream_by_id(streams: &Vec<MioStreamInfo>, stream_id: StreamId) -> Option
     streams.iter().find(|s| s.stream_id == stream_id)
 }
 
-fn get_stream_by_token(streams: &Vec<MioStreamInfo>, token: Token) -> Option<&MioStreamInfo> {
-    streams.iter().find(|s| s.token == token)
+fn get_stream_by_token(streams: &mut Vec<MioStreamInfo>, token: Token) -> Option<&mut MioStreamInfo> {
+    streams.iter_mut().find(|s| s.token == token)
 }
 
 struct MioStreamInfo {
     stream_id: StreamId,
     stream: Box<dyn MioStream>,
     token: Token,
+    log_when_connected: bool,
     interest: mio::Interest,
 }
 
