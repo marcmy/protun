@@ -124,9 +124,9 @@ impl LocalAgentHandler {
             self.exit_label = None;
             self.agent_info = AgentConnectionInfo::default();
             self.jails.clear();
+            self.local_agent_stats.reset();
         }
         self.last_peer = Some(new_peer);
-        self.local_agent_stats.reset();
     }
     
     pub(crate) fn handle_message(&mut self, message: LocalAgentMessage) -> Option<Event> {
@@ -147,9 +147,13 @@ impl LocalAgentHandler {
     pub(crate) fn local_agent_selectors_to_watch() -> Vec<LocalAgentSelector> {
         vec![
             LocalAgentSelector::InfoEstablished,
+            // LocalAgentSelector::InfoExitIpv4, // VPNCORE-82
+            // LocalAgentSelector::InfoExitIpv6, // VPNCORE-82
             LocalAgentSelector::InfoGroups,
-            // LocalAgentSelector::InfoPlatform,
+            // LocalAgentSelector::InfoPlatform, // unused
             LocalAgentSelector::InfoRemote,
+            // LocalAgentSelector::InfoRemoteReal, // VPNCORE-82
+            // LocalAgentSelector::InfoRemoteRealLocationCode, // VPNCORE-82
             LocalAgentSelector::Restrictions,
             LocalAgentSelector::SettingsCircumventionRouting,
             LocalAgentSelector::SettingsLabel,
@@ -244,7 +248,7 @@ impl LocalAgentHandler {
     fn handle_jails(&mut self, jails: Option<Jails>) -> Option<Event> {
         self.jails.clear();
         if let Some(jails) = jails {
-            jails.0.into_iter().for_each(|jail| {
+            for jail in jails.0 {
                 let wait_reason: WaitJailReason = match jail {
                     Jail::InternallyHandled(jail) => match jail {
                         HandledJail::SystemError(message) => WaitJailReason::Internal { message },
@@ -285,7 +289,7 @@ impl LocalAgentHandler {
                     }
                 };
                 self.jails.push(wait_reason);
-            });
+            }
         }
         None
     }
