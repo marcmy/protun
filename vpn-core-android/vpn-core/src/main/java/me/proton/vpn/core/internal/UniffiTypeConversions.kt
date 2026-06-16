@@ -172,8 +172,8 @@ fun uniffi.protun.AgentConnectionInfo.toCoreApi() = AgentConnectionInfo(
     },
 )
 
-fun uniffi.protun.InterfaceState.toCoreApi() = when (this) {
-    is uniffi.protun.InterfaceState.Up -> InterfaceState.Up(error?.toCoreApi())
+fun uniffi.protun.InterfaceState.toCoreApi(ipV6Enabled: Boolean) = when (this) {
+    is uniffi.protun.InterfaceState.Up -> InterfaceState.Up(error?.toCoreApi(), ipV6Enabled)
     is uniffi.protun.InterfaceState.Down -> InterfaceState.Down(lastError?.toCoreApi())
 }
 

@@ -45,7 +45,7 @@ data class VpnState(
 
 @Parcelize
 sealed interface InterfaceState : Parcelable {
-    data class Up(val error: InterfaceError?): InterfaceState
+    data class Up(val error: InterfaceError?, val ipV6Enabled: Boolean): InterfaceState
     data class Down(val lastError: InterfaceError?): InterfaceState
 }
 

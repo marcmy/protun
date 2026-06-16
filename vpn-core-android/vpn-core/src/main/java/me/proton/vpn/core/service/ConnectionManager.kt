@@ -265,7 +265,8 @@ internal class ConnectionManager(
                 //TODO(VPNAND-2460): Handle TUN I/O errors properly. Tun fd might invalid because:
                 // - another VPN app took over the TUN interface -> disconnect with error
                 // - system closed the TUN interface due to resource constraints
-                state.value = VpnState(proTunState.interfaceState.toCoreApi(), connectionState)
+                val ipV6Enabled = activeConnection.currentConfig.interfaceConfig.supportInTunnelIPv6
+                state.value = VpnState(proTunState.interfaceState.toCoreApi(ipV6Enabled), connectionState)
             }
         }
     }
