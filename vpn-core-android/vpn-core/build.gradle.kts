@@ -112,34 +112,23 @@ dependencies {
     api(project(rustProviderModule))
 }
 
-fun getRepoVersionName(workDir: File = file(".")): String {
-    // Find last tag in the form M.m.D, D is optional. Add number of commits from that tag to D to form final
-    // version name
-    val tag = exec("git", "tag", "--merged", "HEAD", workDir = workDir)
-        .trim()
-        .split("\n")
-        .reversed()
-        .find { it.matches(Regex("\\d+(\\.\\d+){1,2}")) }
-
-    if (tag == null) throw RuntimeException("Unable to obtain version tag", NullPointerException())
-
-    val tagSplit = tag.split(".").map { it.toInt() }
-    val (major, minor) = tagSplit
-    var dev = tagSplit.getOrElse(2) { 0 }
-    dev += exec("git", "log", "--first-parent", "${tag}..HEAD", "--oneline", workDir = workDir)
-        .lineSequence()
-        .filter { it.isNotBlank() }
-        .count()
-    return "${major}.${minor}.${dev}"
-}
-
-private fun exec(vararg cmd: String, workDir: File = file(".")): String {
-    val proc = providers.exec {
-        commandLine = cmd.toList()
-        workingDir = workDir
+// Read the crate version from protun's Cargo.toml ([package] version).
+fun getRepoVersionName(): String {
+    val cargoToml = file("../../Cargo.toml")
+    if (!cargoToml.isFile) {
+        throw RuntimeException("Unable to find crate manifest at $cargoToml")
     }
-    if (proc.result.get().exitValue != 0)
-        throw RuntimeException("Error executing: $cmd", RuntimeException(proc.standardError.asText.get()))
+    val lines = cargoToml.readLines()
+    val packageStart = lines.indexOfFirst { it.trim() == "[package]" }
+    if (packageStart < 0) {
+        throw RuntimeException("No [package] section in $cargoToml")
+    }
 
-    return proc.standardOutput.asText.get()
+    // First `version = "..."` within the [package] table
+    val versionRegex = Regex("""^\s*version\s*=\s*"([^"]+)""")
+    for (line in lines.drop(packageStart + 1)) {
+        if (line.trimStart().startsWith("[")) break
+        versionRegex.find(line)?.let { return it.groupValues[1] }
+    }
+    throw RuntimeException("No version found in [package] of $cargoToml")
 }
