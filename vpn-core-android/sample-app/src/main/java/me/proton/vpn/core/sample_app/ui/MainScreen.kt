@@ -88,6 +88,9 @@ fun MainScreen(
             peerPublicKey = cfg.peerPublicKey
             clientPrivateKey = cfg.clientPrivateKey
             exitLabel = cfg.exitLabel ?: ""
+            isLocalAgentMode = cfg.localAgentMode
+            user = cfg.username
+            password = cfg.password
         }
     }
 
@@ -149,12 +152,14 @@ fun MainScreen(
                 modifier = Modifier.fillMaxWidth()
             )
 
-            OutlinedTextField(
-                value = clientPrivateKey,
-                onValueChange = { clientPrivateKey = it },
-                label = { Text("Client X25519 private key (Base64)") },
-                modifier = Modifier.fillMaxWidth()
-            )
+            AnimatedVisibility(visible = !isLocalAgentMode) {
+                OutlinedTextField(
+                    value = clientPrivateKey,
+                    onValueChange = { clientPrivateKey = it },
+                    label = { Text("Client X25519 private key (Base64)") },
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
 
             Row(
                 verticalAlignment = Alignment.CenterVertically,
