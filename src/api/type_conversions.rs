@@ -18,8 +18,12 @@
 use std::{io, net::IpAddr, str::FromStr};
 
 use pvpnclient::{stats::TunnelStats, vpn::{WireguardPrivateKey, WireguardPublicKey}};
+#[cfg(feature = "local-agent")]
+use pvpnclient::MuonCookies;
 
 use crate::api::connection::{CLIENT_PRIV_KEY_SIZE_BYTES, IpAddress, PEER_PUB_KEY_SIZE_BYTES, WgClientPrivateKey, WgPeerPublicKey, ConnectionMode, CacheKey, PersistentCache};
+#[cfg(feature = "local-agent")]
+use crate::api::connection::{Cookie, Cookies};
 use crate::api::events::Event;
 use crate::connection::pvpn_client::PvpnClientMode;
 
@@ -27,6 +31,8 @@ use crate::connection::pvpn_client::PvpnClientMode;
 use crate::api::local_agent::{LocalAgentSettings, NetshieldLevel, Restriction};
 #[cfg(feature = "local-agent")]
 use pvpnclient::{Ed25519PrivateKey, LocalAgentCertificate, MuonAuth, SessionSettings};
+#[cfg(feature = "local-agent")]
+use pvpnclient::cookie_store::RawCookie;
 
 #[cfg(feature = "uniffi")]
 uniffi::custom_type!(WgClientPrivateKey, Vec<u8>);
@@ -180,13 +186,15 @@ impl ConnectionMode {
             ConnectionMode::LocalAgent {
                 settings: _local_agent_settings,
                 app_version,
-                user_agent
+                user_agent,
+                muon_env,
             } => PvpnClientMode::LocalAgent {
                 app_version: app_version.clone(),
                 user_agent: user_agent.clone(),
                 private_key: cache.get(CacheKey::PrivateKey).map(to_private_key).transpose()?,
                 certificate: cache.get(CacheKey::Certificate).map(to_certificate).transpose()?,
                 muon_auth: cache.get(CacheKey::ApiSession).map(to_muon_auth).transpose()?,
+                muon_env: muon_env.clone()
             }
         })
     }
@@ -219,5 +227,27 @@ fn to_muon_auth(data: Vec<u8>) -> Result<MuonAuth, io::Error> {
         Ok(key) => Ok(key),
         Err(e) =>
             Err(io::Error::new(io::ErrorKind::InvalidData, format!("Failed to parse muon auth: {e:?}"))),
+    }
+}
+
+#[cfg(feature = "local-agent")]
+impl From<&RawCookie<'_>> for Cookie {
+    fn from(value: &RawCookie) -> Cookie {
+        Cookie { name: value.name().to_string(), value: value.value().to_string() }
+    }
+}
+
+#[cfg(feature = "local-agent")]
+impl From<&Cookie> for RawCookie<'_> {
+
+    fn from(value: &Cookie) -> Self {
+        RawCookie::new(value.name.clone(), value.value.clone())
+    }
+}
+
+#[cfg(feature = "local-agent")]
+impl From<Cookies> for MuonCookies {
+    fn from(value: Cookies) -> Self {
+        value.cookies.iter().map(Into::into).collect()
     }
 }

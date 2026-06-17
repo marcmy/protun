@@ -166,8 +166,16 @@ fn main()  {
                     Event::Error { error: ErrorEvent::ApiSessionExpired } => {
                         let user = fork_config.username.clone();
                         let pass = fork_config.password.clone();
+                        eprintln!("using login app version {}", fork_config.app_version);
+                        eprintln!("using fork child client id {}", fork_config.child);
                         let fork_selector = get_session_fork_selector(
-                            &fork_config.app_version, &user, &pass).into();
+                            &fork_config.app_version,
+                            &user,
+                            &pass,
+                            &fork_config.child,
+                            fork_config.muon_env.clone(),
+                        )
+                        .into();
                         connection.provide_api_fork_selector(fork_selector);
                     }
                     _ => {}

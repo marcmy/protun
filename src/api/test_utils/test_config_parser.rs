@@ -18,7 +18,7 @@
 use std::collections::HashMap;
 use base64::Engine;
 use ini::ini;
-use crate::api::connection::{ConnectionMode, InitialConnectionConfig, IpAddress, PeerInfo, WgClientPrivateKey, WgPeerPublicKey, PEER_PUB_KEY_SIZE_BYTES};
+use crate::api::connection::{ConnectionMode, InitialConnectionConfig, IpAddress, MuonEnv, PeerInfo, WgClientPrivateKey, WgPeerPublicKey, PEER_PUB_KEY_SIZE_BYTES};
 
 /// Example ini file format (for local agent mode):
 /// ```ini
@@ -53,14 +53,33 @@ pub fn parse_ini_config(path: String) -> Result<(ParsedConfig, Option<ParsedFork
 
     let peers = parse_ini_peers(&ini_config);
 
-    let local_agent: bool = ini_config["mode"]["with_local_agent"].clone().unwrap().parse().unwrap();
+    let local_agent: bool = ini_config["mode"]["with_local_agent"]
+        .clone()
+        .unwrap()
+        .parse()
+        .unwrap();
+
     let connection_mode = if local_agent {
         let user_agent = ini_config["mode"]["user_agent"].clone().unwrap();
         let app_version = ini_config["mode"]["app_version"].clone().unwrap();
+
+        let env = ini_config["mode"].get("env").cloned().flatten()
+            .unwrap_or_else(|| "prod".to_string())
+            .to_lowercase();
+
+        let muon_env = match env.as_ref() {
+            "prod" => MuonEnv::Prod,
+            "atlas" => MuonEnv::Atlas { scientist: None },
+            scientist => MuonEnv::Atlas {
+                scientist: Some(scientist.to_owned()),
+            },
+        };
+
         ConnectionMode::LocalAgent {
             user_agent,
             app_version,
             settings: Default::default(),
+            muon_env: muon_env
         }
     } else {
         let key = ini_config["mode"]["client_private_key"].clone().unwrap();
@@ -70,12 +89,23 @@ pub fn parse_ini_config(path: String) -> Result<(ParsedConfig, Option<ParsedFork
         ConnectionMode::NoLocalAgent { wg_private_key }
     };
 
-    let fork_config = if let ConnectionMode::LocalAgent { app_version, .. } = &connection_mode {
+    let fork_config = if let ConnectionMode::LocalAgent { app_version, muon_env, .. } = &connection_mode {
         let fork_ini = ini_config.get("fork");
         if let Some(fork) = fork_ini {
             let username = fork["username"].clone().unwrap();
             let password = fork["password"].clone().unwrap();
-            Some(ParsedForkConfig { username, password, app_version: app_version.clone() })
+            let login_app_version = fork.get("app_version").cloned().flatten()
+                .unwrap_or_else(|| app_version.clone());
+            let child = fork.get("child").cloned().flatten()
+                .or_else(|| ini_config["mode"].get("child").cloned().flatten())
+                .unwrap_or_else(|| app_version.clone());
+            Some(ParsedForkConfig {
+                username,
+                password,
+                app_version: login_app_version,
+                child,
+                muon_env: muon_env.clone(),
+            })
         } else {
             None
         }
@@ -138,6 +168,8 @@ pub struct ParsedForkConfig {
     pub username: String,
     pub password: String,
     pub app_version: String,
+    pub child: String,
+    pub muon_env: MuonEnv,
 }
 
 pub struct ParsedConfig {

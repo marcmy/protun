@@ -38,9 +38,11 @@ import me.proton.vpn.core.api.ProtonVpnConnectionManager
 import me.proton.vpn.core.api.VpnConnectionEvent
 import me.proton.vpn.core.api.VpnConnectionState
 import me.proton.vpn.core.api.VpnErrorEvent
+import me.proton.vpn.core.internal.toCoreApi
 import me.proton.vpn.core.sample_app.data.ConfigStore
 import me.proton.vpn.core.sample_app.data.VpnConfig
 import me.proton.vpn.core.sample_app.ui.Event.ShowMessage
+import uniffi.protun.MuonEnv
 import uniffi.protun.getSessionForkSelector
 import javax.inject.Inject
 
@@ -98,7 +100,13 @@ class MainViewModel @Inject constructor(
                     VpnErrorEvent.ApiSessionExpired ->
                         configStore.data.first()?.let {
                             val selector = viewModelScope.async(Dispatchers.IO) {
-                                getSessionForkSelector(APP_VERSION, it.username, it.password)
+                                getSessionForkSelector(
+                                    app = APP_VERSION,
+                                    user = it.username,
+                                    pass = it.password,
+                                    child = APP_VERSION,
+                                    muonEnv = MuonEnv.Prod
+                                ).toCoreApi()
                             }
                             connectionManager.updateApiSelector(selector.await())
                         }

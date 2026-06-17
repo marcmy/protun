@@ -44,7 +44,7 @@ use crate::{
         },
     },
 };
-use crate::api::connection::{CacheKey, ConnectionMode, EventCallback, PersistentCache};
+use crate::api::connection::{CacheKey, ConnectionMode, EventCallback, MuonEnv, PersistentCache};
 use crate::api::events::Event;
 use crate::connection::pvpn_connection::PvpnDependencies;
 use super::test_clocks::{TestMonotonicClock, TestRealtimeClock};
@@ -406,6 +406,7 @@ pub(crate) fn prepare_local_agent_connection_test(
                     user_agent: "protun-test".to_string(),
                     app_version: "android-vpn@0.0.0".to_string(),
                     settings,
+                    muon_env: MuonEnv::Prod,
                 },
             };
 

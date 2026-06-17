@@ -141,7 +141,12 @@ fn await_state(
                             let user = fork_config.username.clone();
                             let pass = fork_config.password.clone();
                             let fork_selector = get_session_fork_selector(
-                                &fork_config.app_version, &user, &pass).into();
+                                &fork_config.app_version,
+                                &user,
+                                &pass,
+                                &fork_config.child,
+                                fork_config.muon_env.clone(),
+                            ).into();
                             connection.provide_api_fork_selector(fork_selector);
                         }
                     }

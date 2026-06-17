@@ -71,7 +71,7 @@ interface ProtonVpnConnectionManager {
     fun connect(config: InitialConfig)
     fun updateInterfaceConfig(interfaceConfig: InterfaceConfig)
     fun updateLocalAgentSettings(localAgentSettings: LocalAgentSettings)
-    fun updateApiSelector(selector: String)
+    fun updateApiSelector(selector: ForkSelectorInfo)
     fun updatePeers(peers: List<Peer>)
 
     /**
@@ -184,3 +184,9 @@ data class LocalAgentStats(
     /** Estimated bandwidth saved by NetShield blocks, in bytes. */
     val dataSaved: ULong?,
 ) : Parcelable
+
+@Parcelize
+data class ForkSelectorInfo(val selector: String, val cookies: List<Cookie>) : Parcelable
+
+@Parcelize
+data class Cookie(val name: String, val value: String) : Parcelable
