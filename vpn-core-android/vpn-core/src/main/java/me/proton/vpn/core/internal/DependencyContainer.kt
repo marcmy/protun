@@ -29,7 +29,6 @@ import me.proton.vpn.core.service.ConnectionManager
 import me.proton.vpn.core.service.usecases.EstablishTun
 import me.proton.vpn.core.service.usecases.EstablishTunImpl
 import me.proton.vpn.core.service.usecases.NetworkObserver
-import me.proton.vpn.core.service.usecases.NetworkObserverImpl
 import uniffi.protun.ClientLogger
 import uniffi.protun.LogLevel
 import uniffi.protun.PersistentCache
@@ -102,7 +101,7 @@ internal object DependencyContainer {
 
     // Lazy-initialized internal dependencies
     private val networkObserver: NetworkObserver by lazy {
-        NetworkObserverImpl(appContext, logger)
+        NetworkObserver(appContext, logger)
     }
 
     private val establishTun: EstablishTun by lazy {

@@ -19,7 +19,6 @@
 
 package me.proton.vpn.core.service
 
-import android.net.Network
 import android.net.VpnService
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -45,7 +44,6 @@ import me.proton.vpn.core.service.usecases.NetworkObserver
 import uniffi.protun.ConfigUpdate
 import uniffi.protun.Connection
 import uniffi.protun.ConnectionState
-import uniffi.protun.ConnectivityEvent
 import uniffi.protun.EventCallback
 import uniffi.protun.InitialConnectionConfig
 import uniffi.protun.LogLevel
@@ -65,7 +63,6 @@ internal class ConnectionManager(
     data class ActiveConnection(
         val connection: Connection,
         val currentConfig: InitialConfig,
-        val validatedNetworks: Set<Network>,
         val startedAt: Date,
         val stateChangeCallback: ProTunStateChangedCallback,
     ) {
@@ -86,21 +83,8 @@ internal class ConnectionManager(
 
     fun init(serviceScope: CoroutineScope) {
         this.serviceScope = serviceScope
-        networkObserver.validatedNetworks.onEach { validatedNetworks ->
-            logger.log(LogLevel.INFO, "Validated networks change: $validatedNetworks")
-            activeConnection?.let { connection ->
-                if (connection.validatedNetworks != validatedNetworks) {
-                    val wasUnavailable = connection.validatedNetworks.isEmpty()
-                    activeConnection = connection.copy(validatedNetworks = validatedNetworks)
-                    connection.connection.onConnectivityChange(
-                        when {
-                            validatedNetworks.isEmpty() -> ConnectivityEvent.DOWN
-                            wasUnavailable -> ConnectivityEvent.UP
-                            else -> ConnectivityEvent.NETWORK_SWITCH
-                        }
-                    )
-                }
-            }
+        networkObserver.events.onEach { event ->
+            activeConnection?.connection?.onConnectivityChange(event)
         }.launchIn(serviceScope)
     }
 
@@ -147,8 +131,7 @@ internal class ConnectionManager(
             is EstablishTun.Result.Success -> {
                 val tunFd = establishResult.fd
                 val stateChangeCallback = ProTunStateChangedCallback(WeakReference(this))
-                val validatedNetworks = networkObserver.validatedNetworks.value
-                val networkAvailable = validatedNetworks.isNotEmpty()
+                val networkAvailable = networkObserver.isNetworkAvailable
                 logger.log(LogLevel.INFO, "pvpn: Starting ProTUN, network available: $networkAvailable")
                 val nativeConnection = Connection.unixConnect(
                     config = InitialConnectionConfig(
@@ -165,7 +148,6 @@ internal class ConnectionManager(
                 )
                 activeConnection = ActiveConnection(
                     connection = nativeConnection,
-                    validatedNetworks = validatedNetworks,
                     stateChangeCallback = stateChangeCallback,
                     startedAt = Date(wallClockMs()),
                     currentConfig = config,
