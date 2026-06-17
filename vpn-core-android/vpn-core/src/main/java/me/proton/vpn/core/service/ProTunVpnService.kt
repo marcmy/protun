@@ -35,6 +35,7 @@ import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
 import kotlinx.parcelize.Parcelize
 import me.proton.vpn.core.api.ForegroundServiceNotificationFactory
+import me.proton.vpn.core.api.ForkSelectorInfo
 import me.proton.vpn.core.api.InitialConfig
 import me.proton.vpn.core.api.InterfaceConfig
 import me.proton.vpn.core.api.LocalAgentSettings
@@ -223,7 +224,7 @@ internal class ProTunVpnService : VpnService() {
             @Parcelize data class Peers(val peers: List<Peer>) : Update
             @Parcelize data class PacketCapture(val packetCaptureInfo: PacketCaptureInfo?) : Update
             @Parcelize data class Settings(val settings: LocalAgentSettings) : Update
-            @Parcelize data class ApiSelector(val selector: String) : Update
+            @Parcelize data class ApiSelector(val selector: ForkSelectorInfo) : Update
             @Parcelize data object RequestConnectionStats : Update
             @Parcelize data object RequestLocalAgentStats : Update
         }

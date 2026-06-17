@@ -23,6 +23,8 @@ import me.proton.vpn.core.api.AgentConnectionInfo
 import me.proton.vpn.core.api.AgentConnectionWaitReason
 import me.proton.vpn.core.api.ConnectionMode
 import me.proton.vpn.core.api.ConnectionStats
+import me.proton.vpn.core.api.Cookie
+import me.proton.vpn.core.api.ForkSelectorInfo
 import me.proton.vpn.core.api.InterfaceError
 import me.proton.vpn.core.api.InterfaceState
 import me.proton.vpn.core.api.LocalAgentSettingType
@@ -48,6 +50,7 @@ import uniffi.protun.DisconnectReason
 import uniffi.protun.ErrorEvent
 import uniffi.protun.Event
 import uniffi.protun.FileWriteMode
+import uniffi.protun.MuonEnv
 import uniffi.protun.PcapFile
 import uniffi.protun.PcapFileInfo
 import uniffi.protun.PeerConnectionInfo
@@ -97,6 +100,11 @@ fun NetShieldLevel.toUniFFI(): uniffi.protun.NetshieldLevel = when (this) {
     NetShieldLevel.AdsAndMalwareFilter -> uniffi.protun.NetshieldLevel.ADS_AND_MALWARE_FILTER
     NetShieldLevel.AdultAndAdsAndMalwareFilter -> uniffi.protun.NetshieldLevel.ADULT_AND_ADS_AND_MALWARE_FILTER
 }
+
+fun ForkSelectorInfo.toUniFFI() = uniffi.protun.ForkSelectorInfo(
+    selector = selector,
+    cookies = uniffi.protun.Cookies(cookies.map { uniffi.protun.Cookie(it.name, it.value) }),
+)
 
 fun PeerConnectionInfo.toCoreApi(): PeerConnection =
     PeerConnection(
@@ -200,7 +208,7 @@ fun ConnectionMode.toUniFFI(): uniffi.protun.ConnectionMode = when (this) {
     is ConnectionMode.NoLocalAgent ->
         uniffi.protun.ConnectionMode.NoLocalAgent(clientX25519PrivateKeyBase64.decodeBase64())
     is ConnectionMode.LocalAgent ->
-        uniffi.protun.ConnectionMode.LocalAgent(userAgent, appVersion, settings.toUniFFI())
+        uniffi.protun.ConnectionMode.LocalAgent(userAgent, appVersion, settings.toUniFFI(), MuonEnv.Prod)
 }
 
 fun Event.LocalAgentStats.toCoreApi() = LocalAgentStats(
@@ -251,6 +259,11 @@ fun uniffi.protun.AgentConnectionWaitReason.toCoreApi(): AgentConnectionWaitReas
         uniffi.protun.AgentConnectionWaitReason.SoftJailed ->
             AgentConnectionWaitReason.SoftJailed
     }
+
+fun uniffi.protun.ForkSelectorInfo.toCoreApi() = ForkSelectorInfo(
+    selector = selector,
+    cookies = cookies.cookies.map { Cookie(it.name, it.value) },
+)
 
 @OptIn(ExperimentalEncodingApi::class)
 fun String.decodeBase64(): ByteArray = Base64.decode(this)

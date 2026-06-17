@@ -17,6 +17,7 @@
 
 use derive_more::Debug;
 use std::{io, net::IpAddr, thread::JoinHandle};
+
 use std::sync::Mutex;
 use crate::api::events::Event;
 use crate::connection::pvpn_connection::{start_pvpn_connection, PvpnDependencies, PvpnMessage, SendPvpnMessage};
@@ -156,9 +157,34 @@ impl Connection {
     }
 
     #[cfg_attr(feature = "uniffi", uniffi::method)]
-    pub fn provide_api_fork_selector(&self, fork_selector: String) {
-        (self.send_pvpn_message)(PvpnMessage::ProvideApiForkSelector(fork_selector))
+    pub fn provide_api_fork_selector(&self, fork_selector_info: ForkSelectorInfo) {
+        (self.send_pvpn_message)(PvpnMessage::ProvideApiForkSelector(fork_selector_info))
     }
+}
+
+#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
+#[cfg(feature = "local-agent")]
+#[derive(Debug, Clone)]
+pub struct ForkSelectorInfo {
+    pub selector: String,
+    pub cookies: Cookies,
+}
+
+#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
+#[cfg(feature = "local-agent")]
+#[derive(Debug, Clone)]
+// FIXME: we should provide more cookie info in the future
+// if we want a full cookie support between native and local-agent
+pub struct Cookies {
+    pub cookies: Vec<Cookie>,
+}
+
+#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
+#[cfg(feature = "local-agent")]
+#[derive(Debug, Clone)]
+pub struct Cookie {
+    pub name: String,
+    pub value: String,
 }
 
 #[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
@@ -185,7 +211,20 @@ pub enum ConnectionMode {
         user_agent: String,
         app_version: String,
         settings: LocalAgentSettings,
+        muon_env: MuonEnv,
     },
+}
+
+#[cfg_attr(feature = "uniffi", derive(uniffi::Enum))]
+#[derive(Debug, Clone)]
+#[cfg(feature = "local-agent")]
+pub enum MuonEnv {
+    /// Standard production environment.
+    Prod,
+    /// Atlas test environment.
+    Atlas { scientist: Option<String> },
+    /// Custom server URLs.
+    CustomServers { servers: Vec<String> },
 }
 
 #[cfg_attr(feature = "uniffi", derive(uniffi::Enum))]

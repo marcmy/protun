@@ -15,17 +15,71 @@
 // You should have received a copy of the GNU General Public License
 // along with ProtonVPN.  If not, see <https://www.gnu.org/licenses/>.
 
-use std::future::Future;
-use std::pin::Pin;
-
+use crate::api::connection::{Cookies, ForkSelectorInfo, MuonEnv};
 use async_compat::Compat;
 use futures::TryFutureExt as _;
-use muon::App;
 use muon::auth::LoginFlow;
+use muon::cookie_store::{CookieStore, CookieStoreSetResult};
 use muon::rt::{
     Monotonic, MuonSystemTime, OperatingSystem, Resolve, SinceUnixEpoch as _, SystemTimeFactory,
     TcpConnect,
 };
+use muon::env::Env as _;
+use muon::{App, Environment};
+use pvpnclient::cookie_store;
+use pvpnclient::url::Url;
+use pvpnclient::util::fork_muon_session;
+use std::future::Future;
+use std::pin::Pin;
+use std::str::FromStr as _;
+use std::sync::{Arc, RwLock};
+
+struct VpnApiEnv {
+    servers: Vec<muon::common::Server>,
+    ar_pins: Option<muon::tls::pins::TlsPinSet>,
+    api_pins: Option<muon::tls::pins::TlsPinSet>,
+}
+
+impl muon::env::Env for VpnApiEnv {
+    fn servers(&self, _: &muon::app::AppVersion) -> Vec<muon::common::Server> {
+        self.servers.clone()
+    }
+
+    fn ar_pins(&self) -> Option<&muon::tls::pins::TlsPinSet> {
+        self.ar_pins.as_ref()
+    }
+
+    fn api_pins(&self) -> Option<&muon::tls::pins::TlsPinSet> {
+        self.api_pins.as_ref()
+    }
+}
+
+fn build_muon_environment(muon_env: &MuonEnv) -> Environment {
+    match muon_env {
+        MuonEnv::Prod => {
+            let prod = muon::env::Prod::default();
+            Environment::new_custom(VpnApiEnv {
+                servers: vec![muon::common::Server::from_str("https://vpn-api.proton.me/").unwrap()],
+                ar_pins: prod.ar_pins().cloned(),
+                api_pins: prod.api_pins().cloned(),
+            })
+        }
+        MuonEnv::CustomServers { servers } => {
+            let prod = muon::env::Prod::default();
+            Environment::new_custom(VpnApiEnv {
+                servers: servers.iter()
+                    .filter_map(|s| muon::common::Server::from_str(s)
+                        .map_err(|e| log::warn!("invalid server url {s}: {e}"))
+                        .ok())
+                    .collect(),
+                ar_pins: prod.ar_pins().cloned(),
+                api_pins: prod.api_pins().cloned(),
+            })
+        }
+        MuonEnv::Atlas { scientist: Some(name) } => Environment::new_atlas_name(name.clone()),
+        MuonEnv::Atlas { scientist: None } => Environment::new_atlas(),
+    }
+}
 
 #[derive(Debug, Clone)]
 pub struct TimeCapability {
@@ -129,6 +183,31 @@ impl OperatingSystem for MyOperatingSystem {
     }
 }
 
+#[derive(Debug)]
+pub struct MuonCookieStore {
+    cookies: Arc<RwLock<Vec<cookie_store::RawCookie<'static>>>>,
+}
+
+impl MuonCookieStore {
+    pub fn new(cookies: Arc<RwLock<Vec<cookie_store::RawCookie<'static>>>>) -> Self {
+        Self { cookies }
+    }
+}
+
+impl CookieStore for MuonCookieStore {
+    fn set(&mut self, cookie: cookie_store::Cookie, _url: &Url) -> CookieStoreSetResult {
+        let mut cookies = self.cookies.write().unwrap();
+        if cookies.iter().find(|existing| existing.name().eq_ignore_ascii_case(cookie.name())).is_none() {
+            cookies.push(cookie.into_owned().into());
+        }
+        CookieStoreSetResult::Pass
+    }
+
+    fn get(&self, _url: &Url) -> Vec<cookie_store::RawCookie<'_>> {
+        self.cookies.read().unwrap().clone()
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct TokioExecutor;
 
@@ -143,22 +222,36 @@ impl muon::rt::Spawn for TokioExecutor {
 }
 
 #[cfg_attr(feature = "uniffi", uniffi::export)]
-pub fn get_session_fork_selector(app: &str, user: &str, pass: &str) -> String {
+pub fn get_session_fork_selector(
+    app: &str,
+    user: &str,
+    pass: &str,
+    child: &str,
+    muon_env: MuonEnv,
+) -> ForkSelectorInfo {
     let runtime = tokio::runtime::Builder::new_current_thread()
         .enable_all()
         .build()
         .unwrap();
-    runtime.block_on(get_session_fork_selector_async(app, user, pass))
+    runtime.block_on(get_session_fork_selector_async(app, user, pass, child, muon_env))
 }
 
-pub async fn get_session_fork_selector_async(app: &str, user: &str, pass: &str) -> String {
+pub async fn get_session_fork_selector_async(
+    app: &str,
+    user: &str,
+    pass: &str,
+    child: &str,
+    muon_env: MuonEnv,
+) -> ForkSelectorInfo {
     let app = App::new(app).expect("valid app version");
-    let env = muon::Environment::new_prod();
+    let env = build_muon_environment(&muon_env);
+    let muon_cookies = Arc::new(RwLock::new(Vec::new()));
+    let cookie_store = MuonCookieStore::new(muon_cookies.clone());
     let session = muon::Client::builder(app.clone(), env)
         .with_operating_system(MyOperatingSystem::default(), rand::rng())
         .with_multi_thread_executor(TokioExecutor)
         .without_persistence::<()>()
-        .without_cookie_store()
+        .with_cookie_store(cookie_store)
         .build()
         .unwrap()
         .new_session_without_credentials(())
@@ -175,7 +268,13 @@ pub async fn get_session_fork_selector_async(app: &str, user: &str, pass: &str) 
         LoginFlow::Failed { reason, .. } => panic!("failed to auth {reason:?}"),
     };
 
-    pvpnclient::util::fork_muon_session(session, app)
-        .await
-        .unwrap()
+    let child_app = App::new(child).expect("child fork should be a valid appversion");
+    let selector = fork_muon_session(session, child_app).await
+        .expect("fork failed");
+
+    let cookies = Cookies {
+        cookies: muon_cookies.read().unwrap().iter().map(|c| c.into()).collect()
+    };
+
+    ForkSelectorInfo { selector, cookies }
 }
