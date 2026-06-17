@@ -199,7 +199,7 @@ cmd_new() {
     git checkout -b "$branch" "$base_ref"
     set_cargo_version "$VERSION"
     git add "$CARGO_TOML"
-    git commit -m "Release $VERSION"
+    git commit -m "Bump version to $VERSION"
 
     if [[ $NOPUSH -eq 1 ]]; then
         echo "ship.sh: created $branch off $base_ref (not pushed)" >&2
@@ -228,7 +228,17 @@ cmd_release() {
 
     local force_flag=() push_force=()
     [[ $FORCE -eq 1 ]] && { force_flag=(-f); push_force=(--force); }
-    git tag "${force_flag[@]}" -a "$tag" -m "Release $VERSION" "$ref"
+
+    # Tag message editor pre-populated with a release notes template:
+    #   ```
+    #   Release notes:
+    #
+    #   - Bug fixes and stability improvements
+    #   ```
+    git tag "${force_flag[@]}" -a -e \
+        -m "Release notes:" \
+        -m "- Bug fixes and stability improvements" \
+        "$tag" "$ref"
 
     if [[ $NOPUSH -eq 1 ]]; then
         echo "ship.sh: tagged ${ref:0:9} as $tag (not pushed)" >&2
