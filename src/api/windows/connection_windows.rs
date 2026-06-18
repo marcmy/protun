@@ -17,7 +17,6 @@
 
 use std::io;
 use std::io::{Error, ErrorKind};
-use std::net::IpAddr;
 use std::sync::Arc;
 use pvpnclient::os_interface::rand::CryptoSeedProvider;
 use pvpnclient::os_interface::time::{SinceEpoch, SystemTimeFactory};
@@ -27,16 +26,16 @@ use crate::api::windows::state_changed_callback::WindowsStateChangedCallback;
 use crate::connection::pvpn_client::PvpnClientImpl;
 use crate::connection::time::{ClientMonotonicFactory, ClientRealtimeFactory};
 use crate::connection::windows::helpers::poll_waker::WindowsPollWaker;
-use crate::connection::windows::helpers::routes::delete_created_routes;
+use crate::connection::windows::helpers::routes;
 use crate::connection::windows::streams::WindowsStreams;
 use crate::connection::windows::tun_windows::TunStreamWindows;
 use crate::connection::windows::helpers::winsock::Winsock;
 use crate::api::{connection::{Connection, InitialConnectionConfig, StateChangedCallback}};
 use crate::api::logger::{init_logger, ClientLogger, LogLevel};
-use crate::connection::pvpn_connection::PvpnDependencies;
+use crate::connection::pvpn_connection::{PvpnDependencies, SendPvpnMessage};
 use crate::connection::streams::Streams;
 use crate::connection::windows::helpers::wintun::wintun_session::WinTunSession;
-use crate::utils::common::option_ipv6addr_to_string;
+use crate::utils::common::OptionIpv6AddrAsString;
 
 
 #[cfg_attr(feature = "uniffi", derive(uniffi::Object))]
@@ -74,7 +73,7 @@ impl ProTun {
 
     #[cfg_attr(feature = "uniffi", uniffi::method)]
     pub fn delete_routes(&self) {
-        delete_created_routes();
+        delete_all_stored_routes();
     }
 }
 
@@ -121,8 +120,8 @@ impl WindowsConnection {
         event_callback: Box<dyn EventCallback>,
         cache: Box<dyn PersistentCache>,
     ) -> Result<Self, ProTunFatalError> {
-        let server_ips: Vec<IpAddr> = connection_config.peers.iter().map(|peer| peer.server_ip.0).collect();
-        let tun: Arc<WinTunSession> = Arc::new(WinTunSession::create(server_ips, network_config.tun_adapter)?);
+        delete_all_stored_routes();
+        let tun: Arc<WinTunSession> = Arc::new(WinTunSession::create(network_config.tun_adapter)?);
 
         let waker: Box<WindowsPollWaker> = Box::new(WindowsStreams::create_waker()?);
         let tun_clone: Arc<WinTunSession> = tun.clone();
@@ -130,7 +129,7 @@ impl WindowsConnection {
             Box::new(WindowsStateChangedCallback::new(client_state_change_callback));
         let connection: Arc<Connection> = Arc::new(Connection::connect_internal(
             waker.clone(),
-            move || {
+            move |send_pvpn_message| {
                 create_pvpn_dependencies(
                     waker,
                     connection_config,
@@ -139,6 +138,7 @@ impl WindowsConnection {
                     state_change_callback,
                     event_callback,
                     cache,
+                    send_pvpn_message
                 )
             }
         ));
@@ -157,8 +157,8 @@ impl WindowsConnection {
             interface_index: self.tun.interface_index,
             client_ipv4_addr: self.tun.client_ipv4_addr.to_string(),
             server_ipv4_addr: self.tun.server_ipv4_addr.to_string(),
-            client_ipv6_addr: option_ipv6addr_to_string(&self.tun.client_ipv6_addr),
-            server_ipv6_addr: option_ipv6addr_to_string(&self.tun.server_ipv6_addr)
+            client_ipv6_addr: self.tun.client_ipv6_addr.to_string_or(""),
+            server_ipv6_addr: self.tun.server_ipv6_addr.to_string_or("")
         }
     }
     
@@ -186,7 +186,13 @@ impl Drop for Connection {
 impl Drop for WindowsConnection {
     fn drop(&mut self) {
         log::info!("Dropping Windows Connection");
+        delete_all_stored_routes();
     }
+}
+
+fn delete_all_stored_routes() {
+    log::info!("Deleting all stored routes");
+    routes::delete_all_stored_routes();
 }
 
 fn create_pvpn_dependencies(
@@ -197,10 +203,11 @@ fn create_pvpn_dependencies(
     state_change_callback: Box<dyn StateChangedCallback>,
     event_callback: Box<dyn EventCallback>,
     cache: Box<dyn PersistentCache>,
+    send_pvpn_message: SendPvpnMessage
 ) -> Result<PvpnDependencies, io::Error> {
     let tun_stream: Box<TunStreamWindows> = Box::new(TunStreamWindows::new(tun)
         .map_err(|e| Error::new(ErrorKind::Other, format!("Failed to create streams: {e}")))?);
-    let streams: Box<dyn Streams> = Box::new(WindowsStreams::new(tun_stream, waker, udp_socket_config));
+    let streams: Box<dyn Streams> = Box::new(WindowsStreams::new(tun_stream, waker, udp_socket_config, send_pvpn_message));
 
     let realtime_factory = ClientRealtimeFactory::new();
     let client = Box::new(

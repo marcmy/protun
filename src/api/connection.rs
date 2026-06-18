@@ -63,7 +63,7 @@ impl Connection {
     /// Helper constructor to be used by platform-specific ones.
     pub(crate) fn connect_internal(
         poll_waker: Box<dyn PollWaker + Send + Sync>,
-        create_pvpn_dependencies: impl FnOnce() -> Result<PvpnDependencies, io::Error> + Sync + Send + 'static,
+        create_pvpn_dependencies: impl FnOnce(SendPvpnMessage) -> Result<PvpnDependencies, io::Error> + Sync + Send + 'static,
     ) -> Self {
         let (send_pvpn_message, join_handle) =
             start_pvpn_connection(poll_waker, create_pvpn_dependencies);

@@ -17,23 +17,28 @@
 
 use std::iter::once;
 use std::{io, net::SocketAddr};
+use crate::api::connection::ConnectivityEvent;
+use crate::api::state::{InterfaceError, InterfaceState};
 use crate::api::windows::connection_windows::SocketConfig;
 use crate::api::windows::protun_error::ProTunFatalError;
+use crate::connection::pvpn_connection::{PvpnMessage, SendPvpnMessage};
 use crate::connection::streams::{PollResult, Stream, Streams};
 use crate::connection::windows::helpers::poll_waker::WindowsPollWaker;
+use crate::connection::windows::helpers::routes::VpnServerRouteManager;
+use crate::connection::windows::helpers::sockets::SocketInterface;
 use crate::connection::windows::tcp::TcpSocketStream;
 use crate::connection::windows::udp::UdpSocketStream;
+use crate::utils::windows::network_events::network_observer::NetworkObserver;
+use crate::utils::windows::network_events::network_observer_events::NetworkInterface;
 use pvpnclient::{Deadline, StreamId};
 use windows::Win32::Foundation::{HANDLE, WAIT_EVENT, WAIT_OBJECT_0, WAIT_TIMEOUT};
 use windows::Win32::Networking::WinSock::{WSA_INFINITE, WSAWaitForMultipleEvents};
-use crate::api::state::{InterfaceError, InterfaceState};
 
-const TUN_STREAM_INDEX: usize = 0;
 const TIMEOUT_EVENT: u32 = WAIT_TIMEOUT.0;
 const WAKER_EVENT: u32 = WAIT_OBJECT_0.0;
-const TUN_EVENT: u32 = WAIT_OBJECT_0.0 + 1;
 
 pub(crate) trait WindowsStream: Stream {
+    fn get_interface(&self) -> &SocketInterface;
     fn handle(&mut self) -> HANDLE;
     fn has_error(&self) -> bool;
     fn get_state(&mut self) -> WindowsStreamState;
@@ -55,6 +60,8 @@ pub(crate) struct WindowsStreams {
     /// This vector exists to not be generated in every poll (handles = [stream handles + waker handle])
     handles: Vec<HANDLE>,
     udp_socket_config: SocketConfig,
+    network_observer: NetworkObserver,
+    vpn_server_route_manager: VpnServerRouteManager,
 }
 
 impl WindowsStreams {
@@ -62,12 +69,15 @@ impl WindowsStreams {
         WindowsPollWaker::new()
     }
 
-    pub(crate) fn new(tun: Box<dyn WindowsStream>, waker: Box<WindowsPollWaker>, udp_socket_config: SocketConfig) -> Self {
+    pub(crate) fn new(tun: Box<dyn WindowsStream>, waker: Box<WindowsPollWaker>, udp_socket_config: SocketConfig, send_pvpn_message: SendPvpnMessage) -> Self {
+        let network_observer: NetworkObserver = start_network_observer(send_pvpn_message);
         let mut streams = WindowsStreams {
             streams: Vec::new(),
-            handles: Vec::new(),
             waker: waker,
-            udp_socket_config
+            handles: Vec::new(),
+            udp_socket_config,
+            network_observer,
+            vpn_server_route_manager: VpnServerRouteManager::new()
         };
         streams.register_stream(StreamId::TUN_STREAM_ID, tun);
         streams
@@ -110,6 +120,29 @@ impl WindowsStreams {
         log::debug!("Trying to get stream reference with ID {stream_id}");
         self.streams.iter().find(|s| s.stream_id == stream_id)
     }
+
+    fn send_streams_event(&mut self) {
+        let first_non_tun_stream: Option<&WindowsStreamInfo> = self.streams.iter().find(|stream| stream.stream_id != StreamId::TUN_STREAM_ID);
+        let current_internet_interface: Option<NetworkInterface> = match first_non_tun_stream {
+            Some(stream) => {
+                let interface: &SocketInterface = stream.stream.get_interface();
+                Some(NetworkInterface {
+                    index: interface.interface_index,
+                    ip_addr: interface.address.ip(),
+                })
+            },
+            None => None,
+        };
+
+        self.network_observer.send_current_interface(current_internet_interface);
+    }
+}
+
+fn start_network_observer(send_pvpn_message: SendPvpnMessage) -> NetworkObserver {
+    let send_connectivity_event_msg = Box::new(move |connectivity_event: ConnectivityEvent| {
+        (send_pvpn_message)(PvpnMessage::ConnectivityChange(connectivity_event))
+    });
+    NetworkObserver::start_new_thread(send_connectivity_event_msg)
 }
 
 impl Streams for WindowsStreams {
@@ -122,9 +155,10 @@ impl Streams for WindowsStreams {
 
     fn open_new_tcp_stream(&mut self, stream_id: StreamId, remote_socket: SocketAddr) -> io::Result<()> {
         log::debug!("Opening up a new TCP stream");
-        match TcpSocketStream::new(remote_socket) {
+        match TcpSocketStream::new(&self.vpn_server_route_manager, remote_socket) {
             Ok(tcp_socket_stream) => {
                 self.register_stream(stream_id, Box::new(tcp_socket_stream));
+                self.send_streams_event();
                 Ok(())
             },
             Err(error) => Err(error),
@@ -133,9 +167,10 @@ impl Streams for WindowsStreams {
 
     fn open_new_udp_stream(&mut self, stream_id: StreamId, remote_socket: SocketAddr) -> io::Result<()> {
         log::debug!("Opening up a new UDP socket");
-        match UdpSocketStream::new(remote_socket, &self.udp_socket_config) {
+        match UdpSocketStream::new(&self.vpn_server_route_manager, remote_socket, &self.udp_socket_config) {
             Ok(udp_socket_stream) => {
                 self.register_stream(stream_id, Box::new(udp_socket_stream));
+                self.send_streams_event();
                 Ok(())
             },
             Err(error) => Err(error),
@@ -147,6 +182,7 @@ impl Streams for WindowsStreams {
         // Make sure that the handle of the stream is destroyed
         self.streams.retain(|s| s.stream_id != stream_id);
         self.reset_handles();
+        self.send_streams_event();
     }
 
     fn set_poll_enable_wait_for_write(&mut self, _stream_id: StreamId, _wait_for_write: bool) {
@@ -174,11 +210,9 @@ impl Streams for WindowsStreams {
     }
 
     fn get_tun_interface_state(&self, last_interface_error: Option<InterfaceError>) -> InterfaceState {
-        let is_up = self.get_stream_ref(StreamId::TUN_STREAM_ID).is_some();
-        if is_up {
-            InterfaceState::Up { error: last_interface_error }
-        } else {
-            InterfaceState::Down { last_error: last_interface_error }
+        match self.get_stream_ref(StreamId::TUN_STREAM_ID) {
+            Some(_) => InterfaceState::Up { error: last_interface_error },
+            None => InterfaceState::Down { last_error: last_interface_error },
         }
     }
 }

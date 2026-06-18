@@ -15,7 +15,7 @@
 // You should have received a copy of the GNU General Public License
 // along with ProtonVPN.  If not, see <https://www.gnu.org/licenses/>.
 
-use std::{io, net::SocketAddr, sync::mpsc, thread::{self, JoinHandle}};
+use std::{io, net::SocketAddr, sync::{Arc, mpsc}, thread::{self, JoinHandle}};
 use std::cmp::min;
 use std::io::ErrorKind;
 use std::time::Duration;
@@ -87,7 +87,7 @@ pub(crate) enum PvpnMessage {
     RequestLocalAgentStats,
 }
 
-pub(crate) type SendPvpnMessage = Box<dyn Fn(PvpnMessage) -> () + Send + Sync>;
+pub(crate) type SendPvpnMessage = Arc<dyn Fn(PvpnMessage) + Send + Sync + 'static>;
 
 /// Starts a new thread with libpvpnclient connection loop.
 /// Returns a callback that can be used to send messages ([PvpnMessage]) to the connection loop.
@@ -96,11 +96,20 @@ pub(crate) type SendPvpnMessage = Box<dyn Fn(PvpnMessage) -> () + Send + Sync>;
 /// client), executed in connection thread.
 pub(crate) fn start_pvpn_connection(
     poll_waker: Box<dyn PollWaker + Send + Sync>,
-    create_pvpn_dependencies: impl FnOnce() -> Result<PvpnDependencies, io::Error> + Sync + Send + 'static,
+    create_pvpn_dependencies: impl FnOnce(SendPvpnMessage) -> Result<PvpnDependencies, io::Error> + Sync + Send + 'static,
 ) -> (SendPvpnMessage, JoinHandle<()>) {
     let (message_sender, message_receiver) = mpsc::channel();
+    
+    // Message sender will interrupt the poll to make sure the message is handled in a timely manner.
+    let send_msg: SendPvpnMessage = Arc::new(move |message| {
+        if message_sender.send(message).is_ok() {
+            poll_waker.wake();
+        }
+    });
+    let send_msg_for_streams: SendPvpnMessage = send_msg.clone();
+
     let join_handle = thread::spawn(move || {
-        let dependencies = create_pvpn_dependencies();
+        let dependencies = create_pvpn_dependencies(send_msg_for_streams);
         match dependencies {
             Ok(deps) => {
                 let mut connection = PvpnConnection::new(
@@ -126,11 +135,6 @@ pub(crate) fn start_pvpn_connection(
         }
     });
 
-    // Message sender will interrupt the poll to make sure the message is handled in a timely manner.
-    let send_msg = Box::new(move |message| {
-        message_sender.send(message).unwrap();
-        poll_waker.wake();
-    });
     (send_msg, join_handle)
 }
 

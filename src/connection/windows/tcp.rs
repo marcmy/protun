@@ -19,18 +19,22 @@ use pvpnclient::action::SocketOption;
 use socket2::{Socket, Domain, Type};
 use std::collections::VecDeque;
 use std::io::{self, Error, ErrorKind, Read, Write};
-use std::net::{Shutdown, SocketAddr, SocketAddrV4, SocketAddrV6, TcpStream};
+use std::net::{Shutdown, SocketAddr, TcpStream};
 use std::os::windows::io::AsRawSocket;
 use windows::Win32::Foundation::HANDLE;
 use windows::Win32::Networking::WinSock::SOCKET;
 use crate::connection::streams::{PendingWrite, Stream, StreamResult, WouldBlock};
-use crate::connection::windows::helpers::local_ip_finder::{get_ipv4_internet_interface, get_ipv6_internet_interface};
+use crate::connection::windows::helpers::internet_interface_finder::{InterfaceFinderLogMode, get_ipv4_internet_interface, get_ipv6_internet_interface};
+use crate::connection::windows::helpers::routes::{VpnServerRouteGuard, VpnServerRouteManager};
+use crate::connection::windows::helpers::sockets::SocketInterface;
 use crate::connection::windows::streams::{WindowsStream, WindowsStreamState};
 use crate::connection::windows::helpers::socket_handle::{SocketEvent, SocketHandle};
 use crate::utils::windows::io_error::{Transport, OsErrorToSocketErrorAction, SocketErrorAction};
 
 pub(crate) struct TcpSocketStream {
     socket: TcpStream,
+    interface: SocketInterface,
+    _route: VpnServerRouteGuard,
     write_buffer: VecDeque<Vec<u8>>,
     socket_handle: SocketHandle,
     is_readable: bool,
@@ -38,73 +42,83 @@ pub(crate) struct TcpSocketStream {
 }
 
 impl TcpSocketStream {
-    pub fn new(remote_socket: SocketAddr) -> io::Result<TcpSocketStream> {
-        let tcp_stream: TcpStream = Self::create_tcp_stream(remote_socket)?;
+    pub fn new(vpn_server_route_manager: &VpnServerRouteManager, remote_socket: SocketAddr) -> io::Result<TcpSocketStream> {
+        let (tcp_stream, socket_interface, route) = create(vpn_server_route_manager, remote_socket)?;
         let raw_socket: SOCKET = SOCKET(tcp_stream.as_raw_socket() as usize);
         match SocketHandle::new(raw_socket) {
             Ok(handle) => Ok(TcpSocketStream {
-                    socket: tcp_stream,
-                    write_buffer: VecDeque::new(),
-                    socket_handle: handle,
-                    is_readable: false,
-                    is_writable: false,
-                }),
+                socket: tcp_stream,
+                interface: socket_interface,
+                _route: route,
+                write_buffer: VecDeque::new(),
+                socket_handle: handle,
+                is_readable: false,
+                is_writable: false,
+            }),
             Err(error) => Err(error),
         }
     }
+}
 
-    fn create_tcp_stream(remote_socket_address: SocketAddr) -> io::Result<TcpStream> {
-        let (socket_addr, tcp_socket) = match remote_socket_address {
-            SocketAddr::V4(_) => {
-                if let Ok(Some(interface)) = get_ipv4_internet_interface() {
-                    let socket_addr_v4: SocketAddrV4 = SocketAddrV4::new(interface.local_ip, 0);
-                    log::info!("Binding TCP stream to local {socket_addr_v4} and connect to {remote_socket_address}");
-                    (SocketAddr::V4(socket_addr_v4), Self::create_tcp_socket(Domain::IPV4)?)
-                } else {
-                    return Err(Error::new(ErrorKind::AddrNotAvailable, "Can't find an IPv4 internet interface"));
-                }
-            },
-            SocketAddr::V6(_) => {
-                if let Ok(Some(interface)) = get_ipv6_internet_interface() {
-                    let socket_addr_v6: SocketAddrV6 = SocketAddrV6::new(interface.local_ip, 0, 0, 0);
-                    log::info!("Binding TCP stream to local {socket_addr_v6} and connect to {remote_socket_address}");
-                    (SocketAddr::V6(socket_addr_v6), Self::create_tcp_socket(Domain::IPV6)?)
-                } else {
-                    return Err(Error::new(ErrorKind::AddrNotAvailable, "Can't find an IPv6 internet interface"));
-                }
-            },
-        };
-
-        if let Err(err) = tcp_socket.bind(&socket_addr.into()) {
-            log::error!("Failed to bind the TCP socket to local {socket_addr}: {}", err);
-            return Err(err)
-        };
-        if let Err(err) = tcp_socket.set_nonblocking(true) {
-            log::error!("Failed to set the TCP socket as non-blocking: {}", err);
-            return Err(err);
-        };
-        if let Err(err) = tcp_socket.connect(&remote_socket_address.into()) && err.kind() != ErrorKind::WouldBlock {
-            log::error!("Failed to connect with TCP to remote socket {remote_socket_address}: {}", err);
-            return Err(err)
-        };
-        
-        let tcp_stream: TcpStream = tcp_socket.into();
-        log::info!("Created TCP stream ({}->{})", socket_addr, remote_socket_address);
-        Ok(tcp_stream)
-    }
-
-    fn create_tcp_socket(domain: Domain) -> Result<Socket, std::io::Error> {
-        match Socket::new(domain, Type::STREAM, None) {
-            Ok(tcp_socket) => Ok(tcp_socket),
-            Err(err) => {
-                log::error!("Failed to create '{:?}' TCP socket: {}", domain, err);
-                Err(err)
+fn create(vpn_server_route_manager: &VpnServerRouteManager, remote_socket_address: SocketAddr) -> io::Result<(TcpStream, SocketInterface, VpnServerRouteGuard)> {
+    match remote_socket_address {
+        SocketAddr::V4(ipv4_addr) => {
+            if let Some(ipv4_interface) = get_ipv4_internet_interface(&InterfaceFinderLogMode::create_verbose("TCP IPv4 socket creator")) {
+                let interface: SocketInterface = SocketInterface::new_ipv4(&ipv4_interface);
+                let stream: TcpStream = create_stream(Domain::IPV4, &interface, remote_socket_address)?;
+                let route: VpnServerRouteGuard = vpn_server_route_manager.create_ipv4(*ipv4_addr.ip(), ipv4_interface)?;
+                Ok((stream, interface, route))
+            } else {
+                return Err(Error::new(ErrorKind::AddrNotAvailable, "Can't find an IPv4 internet interface"));
+            }
+        },
+        SocketAddr::V6(ipv6_addr) => {
+            if let Some(ipv6_interface) = get_ipv6_internet_interface(&InterfaceFinderLogMode::create_verbose("TCP IPv6 socket creator")) {
+                let interface: SocketInterface = SocketInterface::new_ipv6(&ipv6_interface);
+                let stream: TcpStream = create_stream(Domain::IPV6, &interface, remote_socket_address)?;
+                let route: VpnServerRouteGuard = vpn_server_route_manager.create_ipv6(*ipv6_addr.ip(), ipv6_interface)?;
+                Ok((stream, interface, route))
+            } else {
+                return Err(Error::new(ErrorKind::AddrNotAvailable, "Can't find an IPv6 internet interface"));
             }
         }
     }
 }
 
+fn create_stream(ip_family_domain: Domain, local_socket_interface: &SocketInterface, remote_socket_address: SocketAddr) -> io::Result<TcpStream> {
+    let socket: Socket = match Socket::new(ip_family_domain, Type::STREAM, None) {
+        Ok(tcp_socket) => tcp_socket,
+        Err(err) => {
+            log::error!("Failed to create '{:?}' TCP socket: {}", ip_family_domain, err);
+            return Err(err);
+        }
+    };
+
+    log::info!("Binding TCP stream to local {local_socket_interface} and connect to {remote_socket_address}");
+
+    if let Err(err) = socket.bind(&local_socket_interface.address.into()) {
+        log::error!("Failed to bind the TCP socket to local {local_socket_interface}: {}", err);
+        return Err(err)
+    };
+    if let Err(err) = socket.set_nonblocking(true) {
+        log::error!("Failed to set the TCP socket as non-blocking: {}", err);
+        return Err(err);
+    };
+    if let Err(err) = socket.connect(&remote_socket_address.into()) && err.kind() != ErrorKind::WouldBlock {
+        log::error!("Failed to connect with TCP to remote socket {remote_socket_address}: {}", err);
+        return Err(err)
+    };
+    
+    let tcp_stream: TcpStream = socket.into();
+    log::info!("Created TCP stream ({}->{})", local_socket_interface, remote_socket_address);
+    Ok(tcp_stream)
+}
+
 impl WindowsStream for TcpSocketStream {
+    fn get_interface(&self) -> &SocketInterface {
+        &self.interface
+    }
+
     fn handle(&mut self) -> HANDLE {
         self.socket_handle.handle
     }
@@ -204,6 +218,6 @@ impl Stream for TcpSocketStream {
 
 impl Drop for TcpSocketStream {
     fn drop(&mut self) {
-        log::info!("TcpSocketStream dropped");
+        log::info!("Dropping TcpSocketStream");
     }
 }

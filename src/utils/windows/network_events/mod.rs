@@ -15,7 +15,6 @@
 // You should have received a copy of the GNU General Public License
 // along with ProtonVPN.  If not, see <https://www.gnu.org/licenses/>.
 
-pub(crate) mod debouncer;
-pub(crate) mod io_error;
-pub(crate) mod network_events;
-pub(crate) mod registry_editor;
+pub(crate) mod network_event_listener;
+pub(crate) mod network_observer_events;
+pub(crate) mod network_observer;

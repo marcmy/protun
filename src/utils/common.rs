@@ -15,11 +15,32 @@
 // You should have received a copy of the GNU General Public License
 // along with ProtonVPN.  If not, see <https://www.gnu.org/licenses/>.
 
-use std::net::Ipv6Addr;
+use std::net::{Ipv4Addr, Ipv6Addr};
 
-pub fn option_ipv6addr_to_string(option_ipv6_addr: &Option<Ipv6Addr>) -> String {
-    match option_ipv6_addr {
-        Some(ipv6_addr) => ipv6_addr.to_string(),
-        None => "".to_string(),
+pub trait OptionIpv6AddrAsString {
+    fn to_string_or(&self, none_text: &str) -> String;
+}
+
+impl OptionIpv6AddrAsString for Option<Ipv6Addr> {
+    /// Creates a string representation of the IPv6 address if it exists, otherwise returns the 'none_text' provided
+    fn to_string_or(&self, none_text: &str) -> String {
+        match self {
+            Some(addr) => addr.to_string(),
+            None => none_text.to_string(),
+        }
+    }
+}
+
+pub trait OptionIpv4AddrAsString {
+    fn to_string_or(&self, none_text: &str) -> String;
+}
+
+impl OptionIpv4AddrAsString for Option<Ipv4Addr> {
+    /// Creates a string representation of the IPv4 address if it exists, otherwise returns the 'none_text' provided
+    fn to_string_or(&self, none_text: &str) -> String {
+        match self {
+            Some(addr) => addr.to_string(),
+            None => none_text.to_string(),
+        }
     }
 }

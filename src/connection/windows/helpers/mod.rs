@@ -17,9 +17,9 @@
 
 pub(crate) mod windows_api;
 pub(crate) mod wintun;
-pub(crate) mod local_ip_finder;
+pub(crate) mod internet_interface_finder;
 pub(crate) mod poll_waker;
 pub(crate) mod routes;
-pub(crate) mod routing_table;
 pub(crate) mod socket_handle;
+pub(crate) mod sockets;
 pub(crate) mod winsock;

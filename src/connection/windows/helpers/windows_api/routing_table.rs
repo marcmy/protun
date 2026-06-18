@@ -22,13 +22,22 @@ use windows::Win32::Foundation::{ERROR_NOT_FOUND, ERROR_OBJECT_ALREADY_EXISTS, E
 use windows::Win32::NetworkManagement::IpHelper::{CreateIpForwardEntry2, DeleteIpForwardEntry2, FreeMibTable, GetIpForwardTable2, InitializeIpForwardEntry, MIB_IPFORWARD_ROW2, MIB_IPFORWARD_TABLE2};
 use windows::Win32::Networking::WinSock::{ADDRESS_FAMILY, AF_INET, AF_INET6, AF_UNSPEC, IN_ADDR, IN_ADDR_0, IN6_ADDR, IN6_ADDR_0, SOCKADDR_INET};
 
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, PartialEq, Eq)]
 pub(crate) enum Route {
     V4(Ipv4Route),
     V6(Ipv6Route),
 }
 
-#[derive(Serialize, Deserialize, Clone)]
+impl fmt::Display for Route {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Route::V4(ipv4_route) => write!(f, "{ipv4_route}"),
+            Route::V6(ipv6_route) => write!(f, "{ipv6_route}"),
+        }
+    }
+}
+
+#[derive(Serialize, Deserialize, Clone, PartialEq, Eq)]
 pub(crate) struct Ipv4Route {
     pub(crate) destination_ip_addr: Ipv4Addr,
     pub(crate) destination_prefix_length: u8,
@@ -46,7 +55,7 @@ impl fmt::Display for Ipv4Route {
     }
 }
 
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, PartialEq, Eq)]
 pub(crate) struct Ipv6Route {
     pub(crate) destination_ip_addr: Ipv6Addr,
     pub(crate) destination_prefix_length: u8,
@@ -142,8 +151,8 @@ pub fn add_v6_route(route: &Ipv6Route) -> Result<(), RouteCreationError> {
             log::info!("IPv6 Route not added because it already exists: {}", route);
             Err(RouteCreationError::AlreadyExists)
         },
-        ERROR_NOT_FOUND => {
-            log::warn!("IPv6 Route not added because IPv6 is disabled: {}", route);
+        ERROR_OBJECT_NOT_FOUND | ERROR_NOT_FOUND => {
+            log::warn!("IPv6 Route not added probably because IPv6 is disabled: {}", route);
             Err(RouteCreationError::ProtocolDisabled)
         },
         _ => {
@@ -196,7 +205,7 @@ pub fn delete_v4_route(route: &Ipv4Route) -> Result<RouteDeletionSuccess, String
             log::info!("IPv4 route deleted successfully: {}", route);
             Ok(RouteDeletionSuccess::Deleted)
         },
-        ERROR_OBJECT_NOT_FOUND => {
+        ERROR_OBJECT_NOT_FOUND | ERROR_NOT_FOUND  => {
             log::info!("IPv4 route already doesn't exist: {}", route);
             Ok(RouteDeletionSuccess::NotFound)
         },
@@ -216,7 +225,7 @@ pub fn delete_v6_route(route: &Ipv6Route) -> Result<RouteDeletionSuccess, String
             log::info!("IPv6 route deleted successfully: {}", route);
             Ok(RouteDeletionSuccess::Deleted)
         },
-        ERROR_OBJECT_NOT_FOUND => {
+        ERROR_OBJECT_NOT_FOUND | ERROR_NOT_FOUND => {
             log::info!("IPv6 route already doesn't exist: {}", route);
             Ok(RouteDeletionSuccess::NotFound)
         },
@@ -227,7 +236,7 @@ pub fn delete_v6_route(route: &Ipv6Route) -> Result<RouteDeletionSuccess, String
     }
 }
 
-pub fn delete_routes(interface_index: u32) -> Vec<Result<RouteDeletionSuccess, String>> {
+pub fn delete_interface_routes(interface_index: u32) -> Vec<Result<RouteDeletionSuccess, String>> {
     let interface_rows: Vec<MIB_IPFORWARD_ROW2> = get_interface_rows(interface_index);
     let mut results: Vec<Result<RouteDeletionSuccess, String>> = vec![];
     
@@ -238,7 +247,7 @@ pub fn delete_routes(interface_index: u32) -> Vec<Result<RouteDeletionSuccess, S
                 log::info!("Route of interface {interface_index} deleted successfully: {}", row_to_string(&row));
                 Ok(RouteDeletionSuccess::Deleted)
             },
-            ERROR_OBJECT_NOT_FOUND => {
+            ERROR_OBJECT_NOT_FOUND | ERROR_NOT_FOUND => {
                 log::info!("Route of interface {interface_index} already doesn't exist: {}", row_to_string(&row));
                 Ok(RouteDeletionSuccess::NotFound)
             },

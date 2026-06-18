@@ -19,3 +19,4 @@ pub(crate) mod adapter_configs;
 pub(crate) mod dns;
 pub(crate) mod ipv6;
 pub(crate) mod local_address;
+pub(crate) mod routing_table;

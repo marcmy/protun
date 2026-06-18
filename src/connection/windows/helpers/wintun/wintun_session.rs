@@ -15,7 +15,7 @@
 // You should have received a copy of the GNU General Public License
 // along with ProtonVPN.  If not, see <https://www.gnu.org/licenses/>.
 
-use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
+use std::net::{Ipv4Addr, Ipv6Addr};
 use std::sync::Arc;
 use windows::Win32::Foundation::WIN32_ERROR;
 use wintun::{Adapter, Session, Wintun};
@@ -26,24 +26,24 @@ use crate::connection::windows::helpers::windows_api::adapter_configs::{set_ipv4
 use crate::connection::windows::helpers::windows_api::dns::{set_adapter_ipv4_dns_servers, set_adapter_ipv6_dns_servers};
 use crate::connection::windows::helpers::windows_api::ipv6::{disable_adapter_ipv6, enable_adapter_ipv6};
 use crate::connection::windows::helpers::windows_api::local_address::{set_adapter_ipv4_address, set_adapter_ipv6_address};
-use crate::connection::windows::helpers::routes::Routes;
+use crate::connection::windows::helpers::routes::TunRoutes;
 use crate::connection::windows::helpers::wintun::constants::{ADAPTER_DESCRIPTION, ADAPTER_GUID, ADAPTER_GUID_U128, ADAPTER_NAME, WINTUN_FILE_NAME};
-use crate::utils::common::option_ipv6addr_to_string;
+use crate::utils::common::OptionIpv6AddrAsString;
 use crate::utils::vector::VecIpAddress;
 
 pub struct WinTunSession {
-    adapter: Arc<Adapter>,
+    _adapter: Arc<Adapter>,
     pub(crate) session: Arc<Session>,
     pub interface_index: u32,
     pub client_ipv4_addr: Ipv4Addr,
     pub server_ipv4_addr: Ipv4Addr,
     pub client_ipv6_addr: Option<Ipv6Addr>,
     pub server_ipv6_addr: Option<Ipv6Addr>,
-    routes: Routes,
+    routes: TunRoutes,
 }
 
 impl WinTunSession {
-    pub fn create(server_ips: Vec<IpAddr>, adapter_config: AdapterConfig) -> Result<Self, ProTunFatalError> {
+    pub fn create(adapter_config: AdapterConfig) -> Result<Self, ProTunFatalError> {
         let buffer_size_bytes: u32 = Self::get_valid_wintun_buffer_size(adapter_config.buffer_size_bytes);
 
         log::info!("Creating WinTUN adapter (Buffer size: {} bytes)", buffer_size_bytes);
@@ -64,21 +64,21 @@ impl WinTunSession {
         let (client_ipv4_addr, client_ipv6_addr) = set_adapter_ip_addresses(interface_index)?;
         let (server_ipv4_addr, server_ipv6_addr) = calculate_and_set_dns_servers(adapter_config.custom_dns_server_ips, client_ipv4_addr, client_ipv6_addr);
 
-        let routes: Routes = Routes::create(server_ipv4_addr, server_ipv6_addr, interface_index, server_ips)?;
+        let routes: TunRoutes = TunRoutes::create(server_ipv4_addr, server_ipv6_addr, interface_index);
 
         let session: Arc<Session> = Arc::new(adapter.start_session(buffer_size_bytes)
             .map_err(|e| ProTunFatalError::WintunSessionCreationFailed(format!("Failed to create the Wintun session. Error: {e}")))?);
         
         log::info!("WinTUN initialization complete");
         Ok(WinTunSession {
-            adapter: adapter,
+            _adapter: adapter,
             session: session,
             interface_index: interface_index,
             client_ipv4_addr: client_ipv4_addr,
             server_ipv4_addr: server_ipv4_addr,
             client_ipv6_addr: client_ipv6_addr,
             server_ipv6_addr: server_ipv6_addr,
-            routes: routes
+            routes
         })
     }
     
@@ -149,7 +149,7 @@ fn set_adapter_ip_addresses(interface_index: u32) -> Result<(Ipv4Addr, Option<Ip
             Err(_) => None,
         };
 
-        log::info!("Adapter IP addresses set successfully (IPv4 '{client_ipv4_addr}') (IPv6 '{}')", option_ipv6addr_to_string(&client_ipv6_addr_result));
+        log::info!("Adapter IP addresses set successfully (IPv4 '{client_ipv4_addr}') (IPv6 '{}')", client_ipv6_addr_result.to_string_or(""));
         return Ok((client_ipv4_addr, client_ipv6_addr_result));
     }
 

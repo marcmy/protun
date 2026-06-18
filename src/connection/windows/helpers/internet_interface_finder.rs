@@ -16,15 +16,14 @@
 // along with ProtonVPN.  If not, see <https://www.gnu.org/licenses/>.
 
 use std::collections::HashMap;
-use std::fmt::{Display, Formatter};
+use std::fmt::{Display, Formatter, Write};
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
 use windows::Win32::Foundation::{NO_ERROR, WIN32_ERROR};
 use windows::Win32::NetworkManagement::Ndis::{IfOperStatusUp, MediaConnectStateConnected, NET_IF_ADMIN_STATUS_UP};
 use windows::core::{Error, GUID};
-use windows::Win32::NetworkManagement::IpHelper::{ConvertInterfaceLuidToGuid, FreeMibTable, GetIfEntry2, GetIpForwardTable2, GetIpInterfaceEntry, GetUnicastIpAddressTable, MIB_IF_ROW2, MIB_IPFORWARD_ROW2, MIB_IPFORWARD_TABLE2, MIB_IPINTERFACE_ROW, MIB_UNICASTIPADDRESS_ROW, MIB_UNICASTIPADDRESS_TABLE};
-use windows::Win32::Networking::WinSock::{ADDRESS_FAMILY, AF_INET, AF_INET6, AF_UNSPEC, SOCKADDR_INET};
+use windows::Win32::NetworkManagement::IpHelper::{ConvertInterfaceLuidToGuid, FreeMibTable, GetIfEntry2, GetIpForwardTable2, GetIpInterfaceEntry, GetUnicastIpAddressTable, IF_TYPE_PROP_VIRTUAL, MIB_IF_ROW2, MIB_IPFORWARD_ROW2, MIB_IPFORWARD_TABLE2, MIB_IPINTERFACE_ROW, MIB_UNICASTIPADDRESS_ROW, MIB_UNICASTIPADDRESS_TABLE};
+use windows::Win32::Networking::WinSock::{ADDRESS_FAMILY, AF_INET, AF_INET6, AF_UNSPEC, IpDadStatePreferred, SOCKADDR_INET};
 
-use crate::api::windows::protun_error::ProTunFatalError;
 use crate::connection::windows::helpers::wintun::constants::ADAPTER_GUID;
 
 #[derive(Eq, Hash, PartialEq)]
@@ -36,133 +35,171 @@ pub(crate) enum InternetInterface {
     V6(Ipv6InternetInterface),
 }
 
+impl Display for InternetInterface {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            InternetInterface::V4(ipv4_internet_interface) => write!(f, "{ipv4_internet_interface}"),
+            InternetInterface::V6(ipv6_internet_interface) => write!(f, "{ipv6_internet_interface}"),
+        }
+    }
+}
+
 #[derive(Clone)]
 pub(crate) struct Ipv4InternetInterface {
     interface_metric: u32,
-    any_route_metric: u32,
+    default_route_metric: u32,
     pub(crate) local_ip: Ipv4Addr,
     pub(crate) interface_index: u32,
     pub(crate) next_hop: Ipv4Addr,
+    is_virtual: bool
 }
 
 impl Ipv4InternetInterface {
     fn effective_metric(&self) -> u32 {
-        self.interface_metric + self.any_route_metric
+        self.interface_metric + self.default_route_metric
     }
 }
 
 impl Display for Ipv4InternetInterface {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "IPv4 address {} -> Next hop {} (Interface {}) (Effective Metric {} = Interface Metric {} + Any Route Metric {})",
-            self.local_ip, self.next_hop, self.interface_index, self.effective_metric(), self.interface_index, self.any_route_metric)
+        write!(f, "IPv4 address {} -> Next hop {} (Interface {}) (Effective Metric {} = Interface Metric {} + Default Route Metric {}) Virtual: {}",
+            self.local_ip, self.next_hop, self.interface_index, self.effective_metric(), self.interface_metric, self.default_route_metric, self.is_virtual)
     }
 }
 
 #[derive(Clone)]
 pub(crate) struct Ipv6InternetInterface {
     interface_metric: u32,
-    any_route_metric: u32,
+    default_route_metric: u32,
     pub(crate) local_ip: Ipv6Addr,
     pub(crate) interface_index: u32,
     pub(crate) next_hop: Ipv6Addr,
+    is_virtual: bool
 }
 
 impl Ipv6InternetInterface {
     fn effective_metric(&self) -> u32 {
-        self.interface_metric + self.any_route_metric
+        self.interface_metric + self.default_route_metric
     }
 }
 
 impl Display for Ipv6InternetInterface {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "IPv6 address {} -> Next hop {} (Interface {}) (Effective Metric {} = Interface Metric {} + Any Route Metric {})",
-            self.local_ip, self.next_hop, self.interface_index, self.effective_metric(), self.interface_index, self.any_route_metric)
+        write!(f, "IPv6 address {} -> Next hop {} (Interface {}) (Effective Metric {} = Interface Metric {} + Default Route Metric {}) Virtual: {}",
+            self.local_ip, self.next_hop, self.interface_index, self.effective_metric(), self.interface_metric, self.default_route_metric, self.is_virtual)
     }
 }
 
-pub(crate) fn get_ipv4_internet_interface() -> core::result::Result<Option<Ipv4InternetInterface>, ProTunFatalError> {
-    let (result, _) = get_internet_interfaces()?;
-    if let Some(ipv4interface) = &result {
-        log::info!("Internet IPv4 interface: {ipv4interface}");
-    }
-    Ok(result)
+pub enum InterfaceFinderLogMode {
+    ErrorsOnly,
+    Verbose { caller_name: String },
 }
 
-pub(crate) fn get_ipv6_internet_interface() -> core::result::Result<Option<Ipv6InternetInterface>, ProTunFatalError> {
-    let (_, result) = get_internet_interfaces()?;
-    if let Some(ipv6interface) = &result {
-        log::info!("Internet IPv6 interface: {ipv6interface}");
+impl InterfaceFinderLogMode {
+    pub fn create_verbose(caller_name: &str) -> Self {
+        InterfaceFinderLogMode::Verbose { caller_name: caller_name.to_string() }
     }
-    Ok(result)
 }
 
-pub(crate) fn get_internet_interfaces() -> core::result::Result<(Option<Ipv4InternetInterface>, Option<Ipv6InternetInterface>), ProTunFatalError> {
-    let interfaces: Vec<InternetInterface> = get_potential_internet_interfaces()?;
-
-    let (ipv4_result, ipv6_result) = (interfaces.iter().find_map(|i| {
-        if let InternetInterface::V4(v4) = i { Some(v4) } else { None }
-    }).cloned(),
-    interfaces.iter().find_map(|i| {
-        if let InternetInterface::V6(v6) = i { Some(v6) } else { None }
-    }).cloned());
-
-    if let Some(ipv4interface) = &ipv4_result {
-        log::info!("Internet IPv4 interface: {ipv4interface}");
-    }
-    if let Some(ipv6interface) = &ipv6_result {
-        log::info!("Internet IPv6 interface: {ipv6interface}");
-    }    
-    
-    Ok((ipv4_result, ipv6_result))
+pub(crate) fn get_ipv4_internet_interface(log_mode: &InterfaceFinderLogMode) -> Option<Ipv4InternetInterface> {
+    get_internet_interfaces(log_mode).0
 }
 
-fn get_potential_internet_interfaces() -> core::result::Result<Vec<InternetInterface>, ProTunFatalError> {
+pub(crate) fn get_ipv6_internet_interface(log_mode: &InterfaceFinderLogMode) -> Option<Ipv6InternetInterface> {
+    get_internet_interfaces(log_mode).1
+}
+
+pub(crate) fn get_internet_interfaces(log_mode: &InterfaceFinderLogMode) -> (Option<Ipv4InternetInterface>, Option<Ipv6InternetInterface>) {
+    match get_potential_internet_interfaces(log_mode) {
+        Some(interfaces) => {
+            let (ipv4_result, ipv6_result) = (
+                interfaces.iter().find_map(|i| {
+                    if let InternetInterface::V4(v4) = i { Some(v4) } else { None }
+                }).cloned(),
+                interfaces.iter().find_map(|i| {
+                    if let InternetInterface::V6(v6) = i { Some(v6) } else { None }
+                }).cloned()
+            ); 
+            
+            (ipv4_result, ipv6_result)
+        },
+        None => (None, None),
+    }
+}
+
+fn get_potential_internet_interfaces(log_mode: &InterfaceFinderLogMode) -> Option<Vec<InternetInterface>> {
     unsafe {
         let mut routing_table: *mut MIB_IPFORWARD_TABLE2 = std::ptr::null_mut();
-        GetIpForwardTable2(AF_UNSPEC, &mut routing_table).ok()
-            .map_err(|e| ProTunFatalError::NoLocalIp(format!("Error when getting the routing table. Win32 error code: {}", e.code())))?;
+        if let Err(e) = GetIpForwardTable2(AF_UNSPEC, &mut routing_table).ok() {
+            log::error!("Error when getting the routing table. Win32 error code: {}", e.code());
+            return None;
+        }
         let routes: &[MIB_IPFORWARD_ROW2] = std::slice::from_raw_parts((*routing_table).Table.as_ptr(), (*routing_table).NumEntries as usize);
 
         let mut ip_addresses_table: *mut MIB_UNICASTIPADDRESS_TABLE = std::ptr::null_mut();
-        GetUnicastIpAddressTable(AF_UNSPEC, &mut ip_addresses_table).ok()
-            .map_err(|e| ProTunFatalError::NoLocalIp(format!("Error when getting the unicast IP address table. Win32 error code: {}", e.code())))?;
+        if let Err(e) = GetUnicastIpAddressTable(AF_UNSPEC, &mut ip_addresses_table).ok() {
+            log::error!("Error when getting the unicast IP address table. Win32 error code: {}", e.code());
+            return None;
+        }
         let ip_addresses: &[MIB_UNICASTIPADDRESS_ROW] = std::slice::from_raw_parts((*ip_addresses_table).Table.as_ptr(), (*ip_addresses_table).NumEntries as usize);
 
         let mut ip_addresses_by_interface_luid: HashMap<InterfaceLuid, Vec<IpAddr>> = HashMap::new();
         for ip_address in ip_addresses {
+            if ip_address.DadState != IpDadStatePreferred {
+                continue;
+            }
             if let Ok(ip) = sockaddr_inet_to_ip_addr(&ip_address.Address) {
                 ip_addresses_by_interface_luid.entry(InterfaceLuid(ip_address.InterfaceLuid.Value)).or_default().push(ip);
             }
         }
 
         let mut valid_internet_interfaces: Vec<InternetInterface> = get_internet_interfaces_from_routes(routes, &ip_addresses_by_interface_luid);
-        valid_internet_interfaces.sort_by_key(|i| match i { // Sort first by protocol (IPv4 > IPv6) and then by metric (lowest first)
-            InternetInterface::V4(iv4) => (4, iv4.effective_metric()),
-            InternetInterface::V6(iv6) => (6, iv6.effective_metric()),
+
+        // Sort first by protocol (IPv4 > IPv6), then by if virtual (preferrence goes to non-virtual), and then by metric (lowest first)
+        valid_internet_interfaces.sort_by_key(|i| match i {
+            InternetInterface::V4(v4if) => (4, v4if.is_virtual, v4if.effective_metric()),
+            InternetInterface::V6(v6if) => (6, v6if.is_virtual, v6if.effective_metric()),
         });
 
-        print_addresses(&valid_internet_interfaces);
+        print_addresses(log_mode, &valid_internet_interfaces);
 
         FreeMibTable(routing_table as _);
         FreeMibTable(ip_addresses_table as _);
 
         if valid_internet_interfaces.is_empty() {
-            Err(ProTunFatalError::NoLocalIp("No valid local internet IP addresses".to_string()))
+            None
         } else {
-            Ok(valid_internet_interfaces)
+            Some(valid_internet_interfaces)
         }
     }
 }
 
-fn print_addresses(valid_internet_interfaces: &[InternetInterface]) {
-    for ipvalid_internet_interface in valid_internet_interfaces {
-        let (ipaddr, interface_metric, any_route_metric, effective_metric) = match ipvalid_internet_interface {
-            InternetInterface::V4(ipv4_internet_interface) => (IpAddr::V4(ipv4_internet_interface.local_ip),
-                ipv4_internet_interface.interface_metric, ipv4_internet_interface.any_route_metric, ipv4_internet_interface.effective_metric()),
-            InternetInterface::V6(ipv6_internet_interface) => (IpAddr::V6(ipv6_internet_interface.local_ip),
-                ipv6_internet_interface.interface_metric, ipv6_internet_interface.any_route_metric, ipv6_internet_interface.effective_metric()),
+fn print_addresses(log_mode: &InterfaceFinderLogMode, valid_internet_interfaces: &[InternetInterface]) {
+    if let InterfaceFinderLogMode::Verbose { caller_name } = log_mode {
+        let log_message: String = match valid_internet_interfaces.is_empty() {
+            true => format!("No available internet interfaces as requested by '{caller_name}'."),
+            false => {
+                let mut log_message: String = format!("Available internet interfaces as requested by '{caller_name}':");
+
+                for ipvalid_internet_interface in valid_internet_interfaces {
+                    let (ipaddr, interface_index, is_virtual, interface_metric, default_route_metric, effective_metric) = match ipvalid_internet_interface {
+                        InternetInterface::V4(ipv4_internet_interface) => (
+                            IpAddr::V4(ipv4_internet_interface.local_ip), ipv4_internet_interface.interface_index, ipv4_internet_interface.is_virtual,
+                            ipv4_internet_interface.interface_metric, ipv4_internet_interface.default_route_metric, ipv4_internet_interface.effective_metric()),
+                        InternetInterface::V6(ipv6_internet_interface) => (
+                            IpAddr::V6(ipv6_internet_interface.local_ip), ipv6_internet_interface.interface_index, ipv6_internet_interface.is_virtual,
+                            ipv6_internet_interface.interface_metric, ipv6_internet_interface.default_route_metric, ipv6_internet_interface.effective_metric()),
+                    };
+
+                    _ = write!(log_message, "\n- Interface Index: {interface_index}, IP: {ipaddr}, Is virtual: {is_virtual}, \
+                        Effective Metric {effective_metric} (Interface Metric {interface_metric} + Default Route Metric {default_route_metric})");
+                }
+
+                log_message
+            }
         };
-        log::info!("- Found IP Address {ipaddr} with Effective Metric {effective_metric} (Interface Metric {interface_metric} + Any Route Metric {any_route_metric})");
+        
+        log::info!("{log_message}");
     }
 }
 
@@ -187,10 +224,10 @@ fn get_internet_interfaces_from_routes(routes: &[MIB_IPFORWARD_ROW2], ip_address
 fn get_internet_interfaces_from_route(route: &MIB_IPFORWARD_ROW2, ip_addresses_by_interface_luid: &HashMap<InterfaceLuid, Vec<IpAddr>>) -> Vec<InternetInterface> {
     let mut potential_interfaces: Vec<InternetInterface> = Vec::new();
 
-    if let Ok(true) = is_route_interface_up(route) {
+    if let Ok(interface_metadata) = get_route_interface_metadata(route) && interface_metadata.is_up {
         if let Some(ip_addresses) = ip_addresses_by_interface_luid.get(&InterfaceLuid(unsafe { route.InterfaceLuid.Value })) {
             for ip_address in ip_addresses {
-                if let Some(interface) = create_internet_interface(route, ip_address) {
+                if let Some(interface) = create_internet_interface(route, ip_address, &interface_metadata) {
                     potential_interfaces.push(interface);
                 }
             }
@@ -200,17 +237,22 @@ fn get_internet_interfaces_from_route(route: &MIB_IPFORWARD_ROW2, ip_addresses_b
     potential_interfaces
 }
 
-fn is_route_interface_up(route: &MIB_IPFORWARD_ROW2) -> windows::core::Result<bool> {
+struct InterfaceMetadata {
+    is_up: bool,
+    is_virtual: bool
+}
+
+fn get_route_interface_metadata(route: &MIB_IPFORWARD_ROW2) -> windows::core::Result<InterfaceMetadata> {
     unsafe {
         let mut row: MIB_IF_ROW2 = MIB_IF_ROW2::default();
         row.InterfaceLuid = route.InterfaceLuid;
         let status: WIN32_ERROR = GetIfEntry2(&mut row);
         if status == NO_ERROR {
-            log::info!("Status of the interface with index {} (AdminStatus: {}) (OperStatus: {}) (MediaConnectState: {})",
+            log::debug!("Status of the interface with index {} (AdminStatus: {}) (OperStatus: {}) (MediaConnectState: {})",
                 route.InterfaceIndex, row.AdminStatus.0, row.OperStatus.0, row.MediaConnectState.0);
-            Ok(row.AdminStatus == NET_IF_ADMIN_STATUS_UP && 
-               row.OperStatus == IfOperStatusUp && 
-               row.MediaConnectState == MediaConnectStateConnected)
+            Ok(InterfaceMetadata {
+                is_up: row.AdminStatus == NET_IF_ADMIN_STATUS_UP && row.OperStatus == IfOperStatusUp && row.MediaConnectState == MediaConnectStateConnected,
+                is_virtual: row.Type == IF_TYPE_PROP_VIRTUAL })
         } else {
             log::error!("Error when fetching the status of the interface with index {}", route.InterfaceIndex);
             Err(windows::core::Error::from_win32())
@@ -218,7 +260,7 @@ fn is_route_interface_up(route: &MIB_IPFORWARD_ROW2) -> windows::core::Result<bo
     }
 }
 
-fn create_internet_interface(route: &MIB_IPFORWARD_ROW2, ip_address: &IpAddr) -> Option<InternetInterface> {
+fn create_internet_interface(route: &MIB_IPFORWARD_ROW2, ip_address: &IpAddr, interface_metadata: &InterfaceMetadata) -> Option<InternetInterface> {
     match ip_address {
         IpAddr::V4(ipv4addr) => {
             let next_hop_result = sockaddr_inet_to_ip_addr(&route.NextHop);
@@ -228,10 +270,11 @@ fn create_internet_interface(route: &MIB_IPFORWARD_ROW2, ip_address: &IpAddr) ->
                     if let Ok(interface_metric) = get_ipv4_interface_metric(route) {
                         return Some(InternetInterface::V4(Ipv4InternetInterface {
                             interface_metric,
-                            any_route_metric: route.Metric,
+                            default_route_metric: route.Metric,
                             local_ip: *ipv4addr,
                             interface_index: route.InterfaceIndex,
-                            next_hop: ipv4_next_hop
+                            next_hop: ipv4_next_hop,
+                            is_virtual: interface_metadata.is_virtual
                         }));
                     }
                 },
@@ -246,10 +289,11 @@ fn create_internet_interface(route: &MIB_IPFORWARD_ROW2, ip_address: &IpAddr) ->
                     if let Ok(interface_metric) = get_ipv6_interface_metric(route) {
                         return Some(InternetInterface::V6(Ipv6InternetInterface {
                             interface_metric,
-                            any_route_metric: route.Metric,
+                            default_route_metric: route.Metric,
                             local_ip: *ipv6addr,
                             interface_index: route.InterfaceIndex,
-                            next_hop: ipv6_next_hop
+                            next_hop: ipv6_next_hop,
+                            is_virtual: interface_metadata.is_virtual
                         }));
                     }
                 },

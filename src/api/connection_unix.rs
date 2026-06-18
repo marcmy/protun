@@ -45,7 +45,7 @@ impl Connection {
         let (poll, waker) = MioStreams::create_mio_poll_with_waker().expect("Failed to create mio poll");
         Self::connect_internal(
             Box::new(waker),
-            move || {
+            move |_| {
                 create_pvpn_dependencies(
                     poll,
                     config,

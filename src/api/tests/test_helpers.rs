@@ -230,7 +230,7 @@ pub(crate) fn prepare_connection_test(
         MioStreams::create_mio_poll_with_waker().expect("Failed to create mio poll");
     let connection = Connection::connect_internal(
         Box::new(waker),
-        move || {
+        move |_| {
             // Prepare TUN
             let tun_stream = if let Some(tun_socket_addr) = tun_socket_addr {
                 Some(create_udp_tun_stream(client_tun_socket_addr, tun_socket_addr).unwrap())
@@ -389,7 +389,7 @@ pub(crate) fn prepare_local_agent_connection_test(
 
     let connection = Connection::connect_internal(
         Box::new(waker),
-        move || {
+        move |_| {
             let tun_stream = if let Some(tun_socket_addr) = tun_socket_addr {
                 Some(create_udp_tun_stream(client_tun_socket_addr, tun_socket_addr).unwrap())
             } else {

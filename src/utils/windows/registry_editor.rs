@@ -56,8 +56,8 @@ fn get_profiles_path() -> PathBuf {
         .join("Profiles")
 }
 
-pub fn get_created_routes() -> Vec<String> {
-    log::info!("Fetching created routes from registry");
+pub fn get_stored_routes() -> Vec<String> {
+    log::info!("Fetching stored routes from registry");
 
     let path: PathBuf = get_protun_path();
     let protun_subkey: RegKey = match RegKey::predef(HKEY_LOCAL_MACHINE).open_subkey_with_flags(&path, KEY_READ) {
@@ -88,9 +88,9 @@ fn get_protun_path() -> PathBuf {
         .join("ProTUN")
 }
 
-pub fn set_created_routes(routes: Vec<String>) {
+pub fn set_stored_routes(routes: Vec<String>) {
     let routes: Vec<String> = routes.iter().filter(|s| s.len() > 0).cloned().collect::<Vec<String>>().distinct();
-    log::info!("Writing {} non-empty created routes to registry:", routes.len());
+    log::info!("Writing {} non-empty stored routes to registry:", routes.len());
 
     let path: PathBuf = get_protun_path();
     let protun_subkey: RegKey = match RegKey::predef(HKEY_LOCAL_MACHINE).create_subkey_with_flags(&path, KEY_ALL_ACCESS) {

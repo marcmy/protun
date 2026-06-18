@@ -22,21 +22,26 @@ use wintun::Packet;
 
 use crate::api::windows::protun_error::ProTunFatalError;
 use crate::connection::streams::{PendingWrite, Stream, StreamResult, WouldBlock};
+use crate::connection::windows::helpers::sockets::SocketInterface;
 use crate::connection::windows::streams::{WindowsStream, WindowsStreamState};
 use crate::connection::windows::helpers::wintun::wintun_session::WinTunSession;
 
 pub(crate) struct TunStreamWindows {
     tun: Arc<WinTunSession>,
     handle: HANDLE,
+    interface: SocketInterface,
 }
 impl TunStreamWindows {
     pub fn new(tun: Arc<WinTunSession>) -> Result<TunStreamWindows, ProTunFatalError> {
         log::info!("New Tun interface with ID: {}", tun.interface_index);
 
+        let interface: SocketInterface = SocketInterface::new_tun(&tun);
+
         match tun.session.get_read_wait_event() {
             Ok(event) => Ok(TunStreamWindows {
                 tun,
                 handle: HANDLE(event as *mut _),
+                interface
             }),
             Err(e) => Err(ProTunFatalError::WintunSessionHandleCreationFailed(format!("Failed to create the Wintun session handle: {e}"))),
         }
@@ -44,6 +49,10 @@ impl TunStreamWindows {
 }
 
 impl WindowsStream for TunStreamWindows {
+    fn get_interface(&self) -> &SocketInterface {
+        &self.interface
+    }
+
     fn handle(&mut self) -> HANDLE {
         self.handle
     }
