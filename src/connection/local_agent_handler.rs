@@ -152,8 +152,8 @@ impl LocalAgentHandler {
             LocalAgentSelector::InfoGroups,
             // LocalAgentSelector::InfoPlatform, // unused
             LocalAgentSelector::InfoRemote,
-            LocalAgentSelector::InfoRemoteReal,
-            LocalAgentSelector::InfoRemoteRealLocationCode,
+            // LocalAgentSelector::InfoRemoteReal, // VPNCORE-82
+            // LocalAgentSelector::InfoRemoteRealLocationCode, // VPNCORE-82
             LocalAgentSelector::Restrictions,
             LocalAgentSelector::SettingsCircumventionRouting,
             LocalAgentSelector::SettingsLabel,

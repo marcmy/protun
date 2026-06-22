@@ -124,7 +124,7 @@ internal class ConnectionManager(
                         }
 
                         is EstablishTun.Result.Success -> {
-                            logger.log(LogLevel.INFO, "pvpn: Re-established VPN interface ${establishResult.fd}")
+                            logger.log(LogLevel.INFO, "pvpn: Re-established VPN interface ${establishResult.fd.fd}")
                             TunStreamInfo.TunFd(establishResult.fd.detachFd())
                         }
                     }
