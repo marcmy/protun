@@ -147,13 +147,13 @@ impl LocalAgentHandler {
     pub(crate) fn local_agent_selectors_to_watch() -> Vec<LocalAgentSelector> {
         vec![
             LocalAgentSelector::InfoEstablished,
-            // LocalAgentSelector::InfoExitIpv4, // VPNCORE-82
-            // LocalAgentSelector::InfoExitIpv6, // VPNCORE-82
+            LocalAgentSelector::InfoExitIpv4,
+            LocalAgentSelector::InfoExitIpv6,
             LocalAgentSelector::InfoGroups,
             // LocalAgentSelector::InfoPlatform, // unused
             LocalAgentSelector::InfoRemote,
-            // LocalAgentSelector::InfoRemoteReal, // VPNCORE-82
-            // LocalAgentSelector::InfoRemoteRealLocationCode, // VPNCORE-82
+            LocalAgentSelector::InfoRemoteReal,
+            LocalAgentSelector::InfoRemoteRealLocationCode,
             LocalAgentSelector::Restrictions,
             LocalAgentSelector::SettingsCircumventionRouting,
             LocalAgentSelector::SettingsLabel,
