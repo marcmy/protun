@@ -23,6 +23,7 @@ import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.content.ServiceConnection
+import android.net.VpnService
 import android.os.IBinder
 import androidx.core.content.ContextCompat
 import kotlinx.coroutines.CoroutineScope
@@ -39,6 +40,7 @@ import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.mapNotNull
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.shareIn
 import kotlinx.coroutines.launch
@@ -80,9 +82,8 @@ internal class ProtonVpnConnectionManagerImpl(
         onBufferOverflow = BufferOverflow.DROP_OLDEST
     )
 
-    override val events: Flow<VpnConnectionEvent> = _eventsInternal
-        .map { event -> event.toCoreApi() }
-        .filterNotNull()
+    override val events: Flow<VpnConnectionEvent> =
+        _eventsInternal.mapNotNull { event -> event.toCoreApi() }
 
     private val _state = MutableStateFlow<VpnState>(VpnState.Disconnected)
     override val state: StateFlow<VpnState> = _state
@@ -110,7 +111,7 @@ internal class ProtonVpnConnectionManagerImpl(
         .shareIn(mainScope, started = SharingStarted.WhileSubscribed(stopTimeoutMillis = 1_000))
 
     override val localAgentStats = combine(
-        createStatsRequestFlow(interval = 5.seconds) { requestLocalAgentStats() },
+        createStatsRequestFlow(interval = 10.seconds) { requestLocalAgentStats() },
         _eventsInternal
     ) { _, event -> (event as? Event.LocalAgentStats)?.toCoreApi() }
         .filterNotNull()
@@ -228,7 +229,11 @@ internal class ProtonVpnConnectionManagerImpl(
     }
 
     private fun sendAction(vpnAction: ProTunVpnService.VpnAction) {
-        ContextCompat.startForegroundService(context,ProTunVpnService.actionIntent(context, vpnAction))
+        if (VpnService.prepare(context) == null) {
+            ContextCompat.startForegroundService(context, ProTunVpnService.actionIntent(context, vpnAction))
+        } else {
+            setState(VpnState.disconnectedWith(VpnDisconnectError.ServiceError("Missing VPN permission")))
+        }
     }
 
     private fun setState(state: VpnState) {
