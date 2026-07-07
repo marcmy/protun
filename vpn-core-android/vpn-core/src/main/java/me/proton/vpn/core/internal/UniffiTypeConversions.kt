@@ -21,6 +21,7 @@ package me.proton.vpn.core.internal
 
 import me.proton.vpn.core.api.AgentConnectionInfo
 import me.proton.vpn.core.api.AgentConnectionWaitReason
+import me.proton.vpn.core.api.ApiEndpoint
 import me.proton.vpn.core.api.ConnectionMode
 import me.proton.vpn.core.api.ConnectionStats
 import me.proton.vpn.core.api.Cookie
@@ -246,9 +247,15 @@ fun Event.toCoreApi(): VpnConnectionEvent? = when (this) {
 }
 
 private fun ErrorEvent.toCoreApi(): VpnErrorEvent = when (this) {
-    ErrorEvent.ApiSessionExpired -> VpnErrorEvent.ApiSessionExpired
+    ErrorEvent.ForkSelectorNeeded -> VpnErrorEvent.ForkSelectorNeeded
+    is ErrorEvent.ApiError -> VpnErrorEvent.ApiError(endpoint.toCoreApi(), httpCode, protonCode, message, refreshTokenInvalid)
     is ErrorEvent.LocalAgentSettingPolicyRefused -> VpnErrorEvent.LocalAgentSettingPolicyRefused(setting.toCoreApi())
     ErrorEvent.CertificateRefreshFatalError -> VpnErrorEvent.CertificateRefreshFatalError
+}
+
+private fun uniffi.protun.ApiEndpoint.toCoreApi(): ApiEndpoint = when (this) {
+    uniffi.protun.ApiEndpoint.AUTH -> ApiEndpoint.Auth
+    uniffi.protun.ApiEndpoint.CERTIFICATE_REFRESH -> ApiEndpoint.CertificateRefresh
 }
 
 fun uniffi.protun.AgentConnectionWaitReason.toCoreApi(): AgentConnectionWaitReason =

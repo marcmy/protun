@@ -57,12 +57,31 @@ pub enum ErrorEvent {
 
     /// Client should provide a new fork selector. Care should be taken to not create a forking loop
     /// where a forked session fails repeatedly.
-    ApiSessionExpired,
+    ForkSelectorNeeded,
+
+    /// API request failure.
+    ApiError {
+        endpoint: ApiEndpoint,
+        http_code: Option<u16>,
+        proton_code: Option<i64>,
+        message: Option<String>,
+
+        /// As with [ForkSelectorNeeded] clients need to provide new fork selector if true.
+        refresh_token_invalid: bool,
+    },
 
     LocalAgentSettingPolicyRefused { setting: LocalAgentSettingType },
 
     /// Library was unable to refresh the certificate and gave up. Client should close the connection.
     CertificateRefreshFatalError,
+}
+
+#[cfg_attr(feature = "uniffi", derive(uniffi::Enum))]
+#[derive(Debug)]
+#[cfg(feature = "local-agent")]
+pub enum ApiEndpoint {
+    Auth,
+    CertificateRefresh,
 }
 
 #[cfg_attr(feature = "uniffi", derive(uniffi::Enum))]

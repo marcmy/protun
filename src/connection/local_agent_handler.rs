@@ -16,12 +16,13 @@
 // along with ProtonVPN.  If not, see <https://www.gnu.org/licenses/>.
 
 use std::time::SystemTime;
+use muon::http;
 use crate::api::local_agent::{AgentConnectionInfo, Restriction, WaitJailReason};
 use crate::api::state::{AgentConnectionWaitReason, ConnectionState, PeerConnectionInfo};
 use pvpnclient::{HandledJail, LocalAgentSelector, LocalAgentValue, ToHandleJail};
 use pvpnclient::{Jail, Jails, LocalAgentError, LocalAgentMessage, LocalAgentServerError};
 use crate::api::connection::IpAddress;
-use crate::api::events::{ErrorEvent, Event, LocalAgentSettingType};
+use crate::api::events::{ApiEndpoint, ErrorEvent, Event, LocalAgentSettingType};
 
 /// Create an accumulator for the stats. The goal is to collect all the information that we need
 /// and then emit a single event once everything is collected.
@@ -134,7 +135,7 @@ impl LocalAgentHandler {
             LocalAgentMessage::Value(value) => self.handle_value(value),
             LocalAgentMessage::Error(error) => self.handle_error(error),
             LocalAgentMessage::MuonForkSelectorNeeded => {
-                Some(Event::Error { error: ErrorEvent::ApiSessionExpired })
+                Some(Event::Error { error: ErrorEvent::ForkSelectorNeeded })
             }
             LocalAgentMessage::LocalAgentConnected => {
                 self.is_connected = true;
@@ -296,10 +297,13 @@ impl LocalAgentHandler {
     
     fn handle_error(&mut self, error: LocalAgentError) -> Option<Event> {
         match error {
-            LocalAgentError::Authentication =>
-                return Some(Event::Error { error: ErrorEvent::ApiSessionExpired }),
+            LocalAgentError::MuonErrorOnCertRefresh(muon_error) =>
+                return Some(muon_error_event(ApiEndpoint::CertificateRefresh, muon_error)),
 
-            LocalAgentError::CertificateFetching =>
+            LocalAgentError::MuonAuth(muon_error) =>
+                return Some(muon_error_event(ApiEndpoint::Auth, muon_error)),
+
+            LocalAgentError::TooManyTriesOnCertRefresh =>
                 return Some(Event::Error { error: ErrorEvent::CertificateRefreshFatalError }),
 
             LocalAgentError::ServerError(e) => {
@@ -386,5 +390,24 @@ fn update_local_agent_stats_with_estimates(event: &mut Event) {
             saved += *adult_content_blocked * AVG_ADULT_CONTENT_SIZE_BYTES;
         };
         *data_saved = Some(saved);
+    }
+}
+
+fn muon_error_event(endpoint: ApiEndpoint, muon_error: muon::error::Error) -> Event {
+    Event::Error { error: ErrorEvent::ApiError {
+        endpoint,
+        http_code: muon_error.http_code().map(Into::into),
+        proton_code: muon_error.proton_error_code().map(Into::into),
+        message: muon_error.proton_error_reason(),
+        refresh_token_invalid: is_refresh_token_invalid(&muon_error),
+    }}
+}
+
+const AUTH_REFRESH_TOKEN_INVALID : i64 = 10013;
+
+fn is_refresh_token_invalid(error: &muon::error::Error) -> bool {
+    match (error.http_code(), error.proton_error_code()) {
+        (Some(http::Status::UNPROCESSABLE_ENTITY), Some(AUTH_REFRESH_TOKEN_INVALID)) => true,
+        _ => false,
     }
 }

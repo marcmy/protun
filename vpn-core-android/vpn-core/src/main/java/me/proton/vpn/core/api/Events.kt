@@ -34,9 +34,24 @@ sealed interface VpnConnectionEvent : Parcelable {
 
 @Parcelize
 sealed interface VpnErrorEvent : Parcelable {
-    data object ApiSessionExpired : VpnErrorEvent
+
+    data object ForkSelectorNeeded : VpnErrorEvent
+
+    data class ApiError(
+        val endpoint: ApiEndpoint,
+        val httpCode: UShort?,
+        val protonCode: Long?,
+        val message: String?,
+        val refreshTokenInvalid: Boolean
+    ) : VpnErrorEvent
+
     data object CertificateRefreshFatalError : VpnErrorEvent
     data class LocalAgentSettingPolicyRefused(val setting: LocalAgentSettingType) : VpnErrorEvent
+}
+
+enum class ApiEndpoint {
+    Auth,
+    CertificateRefresh
 }
 
 enum class LocalAgentSettingType {

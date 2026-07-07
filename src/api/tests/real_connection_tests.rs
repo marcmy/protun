@@ -136,7 +136,7 @@ fn await_state(
         match msg {
             TestMessage::Event(event) => {
                 match event {
-                    Event::Error { error: ErrorEvent::ApiSessionExpired } => {
+                    Event::Error { error: ErrorEvent::ForkSelectorNeeded } => {
                         if let Some(fork_config) = fork_config {
                             let user = fork_config.username.clone();
                             let pass = fork_config.password.clone();

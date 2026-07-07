@@ -97,19 +97,8 @@ class MainViewModel @Inject constructor(
                 is VpnConnectionEvent.PacketCaptureStopped ->
                     events.emit(ShowMessage("Packet capture stopped: ${event.reason.javaClass.simpleName}"))
                 is VpnConnectionEvent.Error -> when (val error = event.error) {
-                    VpnErrorEvent.ApiSessionExpired ->
-                        configStore.data.first()?.let {
-                            val selector = viewModelScope.async(Dispatchers.IO) {
-                                getSessionForkSelector(
-                                    app = APP_VERSION,
-                                    user = it.username,
-                                    pass = it.password,
-                                    child = APP_VERSION,
-                                    muonEnv = MuonEnv.Prod
-                                ).toCoreApi()
-                            }
-                            connectionManager.updateApiSelector(selector.await())
-                        }
+                    VpnErrorEvent.ForkSelectorNeeded ->
+                        updateApiSelector()
 
                     is VpnErrorEvent.LocalAgentSettingPolicyRefused ->
                         events.emit(ShowMessage("Local agent setting policy refused: ${error.setting.javaClass.simpleName}"))
@@ -117,6 +106,13 @@ class MainViewModel @Inject constructor(
                     VpnErrorEvent.CertificateRefreshFatalError -> {
                         connectionManager.disconnect()
                         events.emit(ShowMessage("Certificate refresh fatal error - disconnecting"))
+                    }
+
+                    is VpnErrorEvent.ApiError -> {
+                        if (error.refreshTokenInvalid) {
+                            updateApiSelector()
+                        }
+                        events.emit(ShowMessage("API error with ${error.endpoint}: ${error.httpCode} ${error.protonCode} ${error.message}"))
                     }
                 }
             }
@@ -151,6 +147,21 @@ class MainViewModel @Inject constructor(
             VpnPermissionError.VpnNotSupported-> "VPN not supported on this device"
         }
         viewModelScope.launch { events.emit(Event.ShowMessage(message)) }
+    }
+
+    private suspend fun updateApiSelector() {
+        configStore.data.first()?.let {
+            val selector = viewModelScope.async(Dispatchers.IO) {
+                getSessionForkSelector(
+                    app = APP_VERSION,
+                    user = it.username,
+                    pass = it.password,
+                    child = APP_VERSION,
+                    muonEnv = MuonEnv.Prod
+                ).toCoreApi()
+            }
+            connectionManager.updateApiSelector(selector.await())
+        }
     }
 }
 
