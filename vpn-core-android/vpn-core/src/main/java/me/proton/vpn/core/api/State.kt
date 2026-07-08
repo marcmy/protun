@@ -100,7 +100,7 @@ sealed interface PeerConnectionWaitReason : Parcelable {
 @Parcelize
 sealed interface AgentConnectionWaitReason : Parcelable {
     data object SoftJailed : AgentConnectionWaitReason
-    data class HardJailed(val jails: List<WaitJailReason>) : AgentConnectionWaitReason
+    data class HardJailed(val jails: List<WaitJail>) : AgentConnectionWaitReason
 }
 
 @Parcelize
@@ -136,12 +136,13 @@ sealed interface VpnDisconnectError : Parcelable {
     /**
      * Custom error that the client app can set on disconnect.
      */
-    sealed interface AppError {
+    @Parcelize
+    sealed interface AppError : VpnDisconnectError {
 
         /**
          * App can set this error when failing to recover from a jail.
          */
-        data class UnrecoverableJail(val reason: WaitJailReason): VpnDisconnectError
+        data class UnrecoverableJail(val reason: WaitJailReason): AppError
 
         /** Generic error with throwable. */
         data class Other(val e: Throwable): AppError
@@ -154,20 +155,27 @@ sealed interface VpnDisconnectError : Parcelable {
  * logging/debugging.
  */
 @Parcelize
-sealed interface WaitJailReason : Parcelable {
-    data class Need2FA(val message: String) : WaitJailReason
-    data class BadUserBehavior(val message: String) : WaitJailReason
-    data class DisabledUser(val message: String) : WaitJailReason
-    data class WaitingClientChallengeReply(val message: String) : WaitJailReason
-    data class LowPlan(val message: String) : WaitJailReason
-    data class PendingInvoice(val message: String) : WaitJailReason
-    data class SessionOverLimit(val message: String) : WaitJailReason
+data class WaitJail(
+    val reason: WaitJailReason,
+    val code: ULong,
+    val message: String
+) : Parcelable
+
+@Parcelize
+enum class WaitJailReason : Parcelable {
+    Need2FA,
+    BadUserBehavior,
+    DisabledUser,
+    WaitingClientChallengeReply,
+    LowPlan,
+    PendingInvoice,
+    SessionOverLimit,
 
     // Will be handled internally by the library - no action required by the app.
-    data class Internal(val message: String) : WaitJailReason
+    Internal,
 
     // Unknown error codes, not supported in this version.
-    data class Other(val code: ULong, val message: String) : WaitJailReason
+    Other,
 }
 
 @Parcelize

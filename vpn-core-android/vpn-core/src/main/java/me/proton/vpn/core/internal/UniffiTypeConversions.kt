@@ -45,6 +45,7 @@ import me.proton.vpn.core.api.VpnDisconnectError
 import me.proton.vpn.core.api.VpnDisconnectError.*
 import me.proton.vpn.core.api.VpnErrorEvent
 import me.proton.vpn.core.api.VpnProtocol
+import me.proton.vpn.core.api.WaitJail
 import me.proton.vpn.core.api.WaitJailReason
 import uniffi.protun.CaptureStopReason
 import uniffi.protun.DisconnectReason
@@ -142,16 +143,19 @@ fun PcapFileInfo.toCoreApi() = PacketCaptureInfo(
     maxBytes = maxBytes
 )
 
+fun uniffi.protun.WaitJail.toCoreApi(): WaitJail =
+    WaitJail(reason.toCoreApi(), code, message)
+
 fun uniffi.protun.WaitJailReason.toCoreApi(): WaitJailReason = when (this) {
-    is uniffi.protun.WaitJailReason.BadUserBehavior -> WaitJailReason.BadUserBehavior(message)
-    is uniffi.protun.WaitJailReason.DisabledUser -> WaitJailReason.DisabledUser(message)
-    is uniffi.protun.WaitJailReason.LowPlan -> WaitJailReason.LowPlan(message)
-    is uniffi.protun.WaitJailReason.PendingInvoice -> WaitJailReason.PendingInvoice(message)
-    is uniffi.protun.WaitJailReason.SessionOverLimit -> WaitJailReason.SessionOverLimit(message)
-    is uniffi.protun.WaitJailReason.WaitingClientChallengeReply -> WaitJailReason.WaitingClientChallengeReply(message)
-    is uniffi.protun.WaitJailReason.Need2Fa -> WaitJailReason.Need2FA(message)
-    is uniffi.protun.WaitJailReason.Internal -> WaitJailReason.Internal(message)
-    is uniffi.protun.WaitJailReason.Other -> WaitJailReason.Other(code, message)
+    uniffi.protun.WaitJailReason.BAD_USER_BEHAVIOR -> WaitJailReason.BadUserBehavior
+    uniffi.protun.WaitJailReason.DISABLED_USER -> WaitJailReason.DisabledUser
+    uniffi.protun.WaitJailReason.LOW_PLAN -> WaitJailReason.LowPlan
+    uniffi.protun.WaitJailReason.PENDING_INVOICE -> WaitJailReason.PendingInvoice
+    uniffi.protun.WaitJailReason.SESSION_OVER_LIMIT -> WaitJailReason.SessionOverLimit
+    uniffi.protun.WaitJailReason.WAITING_CLIENT_CHALLENGE_REPLY -> WaitJailReason.WaitingClientChallengeReply
+    uniffi.protun.WaitJailReason.NEED2_FA -> WaitJailReason.Need2FA
+    uniffi.protun.WaitJailReason.INTERNAL -> WaitJailReason.Internal
+    uniffi.protun.WaitJailReason.OTHER -> WaitJailReason.Other
 }
 
 fun uniffi.protun.AgentConnectionInfo.toCoreApi() = AgentConnectionInfo(

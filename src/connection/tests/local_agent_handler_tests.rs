@@ -15,11 +15,12 @@
 // You should have received a copy of the GNU General Public License
 // along with ProtonVPN.  If not, see <https://www.gnu.org/licenses/>.
 
+use crate::api::local_agent::WaitJail;
 use crate::api::local_agent::NetshieldLevel;
 use std::collections::HashSet;
 use std::net::IpAddr;
 use std::str::FromStr;
-use pvpnclient::{HandledJail, ToHandleJail, Jail, Jails, LocalAgentError, LocalAgentMessage, LocalAgentValue};
+use pvpnclient::{HandledJail, ToHandleJail, Jail, Jails, LocalAgentMessage, LocalAgentValue};
 use crate::api::connection::IpAddress;
 use crate::api::events::{ErrorEvent, Event};
 use crate::api::local_agent::WaitJailReason;
@@ -66,7 +67,7 @@ fn connecting_when_hard_jailed() {
         handler.get_state(peer("1.2.3.4")),
         ConnectionState::ConnectingToLocalAgent {
             wait_reason: Some(AgentConnectionWaitReason::HardJailed { ref jails }), ..
-        } if jails.len() == 1 && matches!(&jails[0], WaitJailReason::LowPlan { .. })
+        } if jails.len() == 1 && matches!(&jails[0], WaitJail { reason: WaitJailReason::LowPlan, .. })
     ));
 
     // Clearing jail -> connected
@@ -85,7 +86,7 @@ fn internal_jails_are_mapped_to_internal_variant() {
         handler.get_state(peer("1.2.3.4")),
         ConnectionState::ConnectingToLocalAgent {
             wait_reason: Some(AgentConnectionWaitReason::HardJailed { ref jails }), ..
-        } if jails.len() == 1 && matches!(&jails[0], WaitJailReason::Internal { .. })
+        } if jails.len() == 1 && matches!(&jails[0], WaitJail { reason: WaitJailReason::Internal, .. })
     ));
 }
 

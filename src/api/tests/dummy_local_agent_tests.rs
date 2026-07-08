@@ -15,6 +15,7 @@
 // You should have received a copy of the GNU General Public License
 // along with ProtonVPN.  If not, see <https://www.gnu.org/licenses/>.
 
+use crate::api::local_agent::WaitJail;
 use std::collections::{HashMap, HashSet};
 use std::net::{SocketAddr, UdpSocket};
 use std::thread;
@@ -228,7 +229,7 @@ fn jail_after_connecting_to_local_agent() {
     handles.helper.expect_state(|state| matches!(
         &state.connection_state,
         ConnectionState::ConnectingToLocalAgent { wait_reason: Some(AgentConnectionWaitReason::HardJailed { jails }), .. }
-            if jails.len() == 1 && matches!(&jails[0], WaitJailReason::Internal { .. })
+            if jails.len() == 1 && matches!(&jails[0], WaitJail { reason: WaitJailReason::Internal, .. })
     ));
 
     // Clear cert expired

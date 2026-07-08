@@ -69,25 +69,33 @@ pub struct Coordinates {
     pub longitude: f64,
 }
 
+#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
+#[derive(Clone, Debug, PartialEq)]
+pub struct WaitJail {
+    pub reason: WaitJailReason,
+    pub code: u64,
+    pub message: String,
+}
+
 /// Local agent jails. Most require app/user action to be unjailed ([WaitJailReason::Internal] will
 /// be handled internally by the library). Messages are not localized and suitable only for
 /// logging/debugging.
 #[cfg_attr(feature = "uniffi", derive(uniffi::Enum))]
 #[derive(Clone, Debug, PartialEq)]
 pub enum WaitJailReason {
-    BadUserBehavior { message: String },
-    DisabledUser { message: String },
-    LowPlan { message: String },
-    Need2FA { message: String },
-    PendingInvoice { message: String },
-    SessionOverLimit { message: String },
-    WaitingClientChallengeReply { message: String },
+    BadUserBehavior,
+    DisabledUser,
+    LowPlan,
+    Need2FA,
+    PendingInvoice,
+    SessionOverLimit,
+    WaitingClientChallengeReply,
     
     /// Will be handled internally by the library - no action required by the app.
-    Internal { message: String },
+    Internal,
 
     /// Unknown error codes, not supported in this version.
-    Other { code: u64, message: String },
+    Other,
 }
 
 #[cfg_attr(feature = "uniffi", derive(uniffi::Enum))]

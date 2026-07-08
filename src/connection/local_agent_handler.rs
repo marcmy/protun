@@ -17,7 +17,7 @@
 
 use std::time::SystemTime;
 use muon::http;
-use crate::api::local_agent::{AgentConnectionInfo, Restriction, WaitJailReason};
+use crate::api::local_agent::{AgentConnectionInfo, Restriction, WaitJail, WaitJailReason};
 use crate::api::state::{AgentConnectionWaitReason, ConnectionState, PeerConnectionInfo};
 use pvpnclient::{HandledJail, LocalAgentSelector, LocalAgentValue, ToHandleJail};
 use pvpnclient::{Jail, Jails, LocalAgentError, LocalAgentMessage, LocalAgentServerError};
@@ -75,7 +75,7 @@ pub(crate) struct LocalAgentHandler {
     agent_info: AgentConnectionInfo,
     established_ts: Option<SystemTime>,
     exit_label: Option<String>,
-    jails: Vec<WaitJailReason>,
+    jails: Vec<WaitJail>,
     restrictions: Vec<Restriction>,
     local_agent_stats: LocalAgentStatsAccumulator
 }
@@ -250,46 +250,47 @@ impl LocalAgentHandler {
         self.jails.clear();
         if let Some(jails) = jails {
             for jail in jails.0 {
-                let wait_reason: WaitJailReason = match jail {
+                let code = jail.code();
+                let (reason, message): (WaitJailReason, String) = match jail {
                     Jail::InternallyHandled(jail) => match jail {
-                        HandledJail::SystemError(message) => WaitJailReason::Internal { message },
-                        HandledJail::ExpiredCertificate(message) => WaitJailReason::Internal { message },
-                        HandledJail::RevokedCertificate(message) => WaitJailReason::Internal { message },
-                        HandledJail::KeyAlreadyUsed(message) => WaitJailReason::Internal { message },
-                        HandledJail::InvalidCertificateSignature(message) => WaitJailReason::Internal { message },
+                        HandledJail::SystemError(message) => (WaitJailReason::Internal, message),
+                        HandledJail::ExpiredCertificate(message) => (WaitJailReason::Internal, message),
+                        HandledJail::RevokedCertificate(message) => (WaitJailReason::Internal, message),
+                        HandledJail::KeyAlreadyUsed(message) => (WaitJailReason::Internal, message),
+                        HandledJail::InvalidCertificateSignature(message) => (WaitJailReason::Internal, message),
                     }
                     Jail::ToHandle(jail) => match jail {
-                        ToHandleJail::RequireRecent2FA(message) => WaitJailReason::Need2FA { message },
-                        ToHandleJail::Expired2FA(message) => WaitJailReason::Need2FA { message },
-                        ToHandleJail::Require2FA(message) => WaitJailReason::Need2FA { message },
-                        ToHandleJail::WaitingClientChallengeReply(message) => WaitJailReason::WaitingClientChallengeReply { message },
+                        ToHandleJail::RequireRecent2FA(message) => (WaitJailReason::Need2FA, message),
+                        ToHandleJail::Expired2FA(message) => (WaitJailReason::Need2FA, message),
+                        ToHandleJail::Require2FA(message) => (WaitJailReason::Need2FA, message),
+                        ToHandleJail::WaitingClientChallengeReply(message) => (WaitJailReason::WaitingClientChallengeReply, message),
 
-                        ToHandleJail::PolicyViolation1(message) => WaitJailReason::LowPlan { message },
-                        ToHandleJail::PolicyViolation2(message) => WaitJailReason::PendingInvoice { message },
-                        ToHandleJail::BadUserBehavior(message) => WaitJailReason::BadUserBehavior { message },
-                        ToHandleJail::DisabledUser(message) => WaitJailReason::DisabledUser { message },
-                        ToHandleJail::SessionOverLimit(message) => WaitJailReason::SessionOverLimit { message },
-                        ToHandleJail::FreeSessionOverLimit(message) => WaitJailReason::SessionOverLimit { message },
-                        ToHandleJail::BasicSessionOverLimit(message) => WaitJailReason::SessionOverLimit { message },
-                        ToHandleJail::PlusSessionOverLimit(message) => WaitJailReason::SessionOverLimit { message },
-                        ToHandleJail::VisionarySessionOverLimit(message) => WaitJailReason::SessionOverLimit { message },
-                        ToHandleJail::ProSessionOverLimit(message) => WaitJailReason::SessionOverLimit { message },
+                        ToHandleJail::PolicyViolation1(message) => (WaitJailReason::LowPlan, message),
+                        ToHandleJail::PolicyViolation2(message) => (WaitJailReason::PendingInvoice, message),
+                        ToHandleJail::BadUserBehavior(message) => (WaitJailReason::BadUserBehavior, message),
+                        ToHandleJail::DisabledUser(message) => (WaitJailReason::DisabledUser, message),
+                        ToHandleJail::SessionOverLimit(message) => (WaitJailReason::SessionOverLimit, message),
+                        ToHandleJail::FreeSessionOverLimit(message) => (WaitJailReason::SessionOverLimit, message),
+                        ToHandleJail::BasicSessionOverLimit(message) => (WaitJailReason::SessionOverLimit, message),
+                        ToHandleJail::PlusSessionOverLimit(message) => (WaitJailReason::SessionOverLimit, message),
+                        ToHandleJail::VisionarySessionOverLimit(message) => (WaitJailReason::SessionOverLimit, message),
+                        ToHandleJail::ProSessionOverLimit(message) => (WaitJailReason::SessionOverLimit, message),
 
                         //TODO(VPNCORE-108): should be HandledJail?
                         ToHandleJail::GuestSession(message) => {
                             // should not happen
                             log::warn!("GuestSession: {:?}", message);
-                            WaitJailReason::Internal { message }
+                            (WaitJailReason::Internal, message)
                         }
-                        ToHandleJail::RestrictedServer(message) => WaitJailReason::Internal { message },
-                        ToHandleJail::NoCertificateProvided(message) => WaitJailReason::Internal { message },
-                        ToHandleJail::SessionInstallationInProgress(message) => WaitJailReason::Internal { message },
+                        ToHandleJail::RestrictedServer(message) => (WaitJailReason::Internal, message),
+                        ToHandleJail::NoCertificateProvided(message) => (WaitJailReason::Internal, message),
+                        ToHandleJail::SessionInstallationInProgress(message) => (WaitJailReason::Internal, message),
 
-                        ToHandleJail::Unknown(code, msg) =>
-                            WaitJailReason::Other { code, message: msg },
+                        ToHandleJail::Unknown(_, message) =>
+                            (WaitJailReason::Other, message),
                     }
                 };
-                self.jails.push(wait_reason);
+                self.jails.push(WaitJail{ reason, code, message });
             }
         }
         None

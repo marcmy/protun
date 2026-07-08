@@ -17,7 +17,7 @@
 
 use crate::api::connection::IpAddress;
 #[cfg(feature = "local-agent")]
-use crate::api::local_agent::{AgentConnectionInfo, WaitJailReason};
+use crate::api::local_agent::{AgentConnectionInfo, WaitJail};
 
 /// Combined state of the VPN connection and the TUN interface.
 #[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
@@ -101,7 +101,7 @@ pub enum PeerConnectionWaitReason {
 #[derive(Clone, Debug, PartialEq)]
 pub enum AgentConnectionWaitReason {
     SoftJailed,
-    HardJailed { jails: Vec<WaitJailReason> },
+    HardJailed { jails: Vec<WaitJail> },
 }
 
 #[cfg_attr(feature = "uniffi", derive(uniffi::Enum))]
