@@ -136,7 +136,16 @@ sealed interface VpnDisconnectError : Parcelable {
     /**
      * Custom error that the client app can set on disconnect.
      */
-    data class AppError(val e: Throwable): VpnDisconnectError
+    sealed interface AppError {
+
+        /**
+         * App can set this error when failing to recover from a jail.
+         */
+        data class UnrecoverableJail(val reason: WaitJailReason): VpnDisconnectError
+
+        /** Generic error with throwable. */
+        data class Other(val e: Throwable): AppError
+    }
 }
 
 /**
