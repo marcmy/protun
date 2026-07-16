@@ -20,7 +20,7 @@ use std::io::{self, Read, Write};
 use std::os::fd::{FromRawFd, RawFd};
 use mio::event;
 
-use crate::connection::mio::streams::MioStream;
+use crate::connection::mio::streams::{is_would_block, MioStream};
 use crate::connection::mio::tun_source::TunSourceFd;
 use crate::connection::streams::{PendingWrite, Stream, StreamResult, WouldBlock};
 
@@ -55,7 +55,7 @@ impl Stream for TunStreamUnix {
                     StreamResult::ok(bytes_count, WouldBlock::No, PendingWrite::No)
                 }
             }
-            Err(e) => if e.kind() == io::ErrorKind::WouldBlock {
+            Err(e) => if is_would_block(&e) {
                 StreamResult::ok(0, WouldBlock::Yes, PendingWrite::No)
             } else {
                 StreamResult::Err(e)
@@ -74,7 +74,7 @@ impl Stream for TunStreamUnix {
                     }
                     bytes_written += bytes_count;
                 }
-                Err(e) => return if e.kind() == io::ErrorKind::WouldBlock {
+                Err(e) => return if is_would_block(&e) {
                     StreamResult::ok(bytes_written, WouldBlock::Yes, PendingWrite::No)
                 } else {
                     StreamResult::Err(e)

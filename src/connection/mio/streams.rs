@@ -220,3 +220,7 @@ impl PollWaker for MioPollWaker {
         }
     }
 }
+
+pub(crate) fn is_would_block(err: &io::Error) -> bool {
+    err.kind() == io::ErrorKind::WouldBlock || err.raw_os_error() == Some(libc::ENOBUFS)
+}

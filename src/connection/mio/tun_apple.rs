@@ -20,7 +20,7 @@ use std::io::{self, Read, Write};
 use std::os::fd::{FromRawFd, RawFd};
 use mio::event;
 
-use crate::connection::mio::streams::MioStream;
+use crate::connection::mio::streams::{is_would_block, MioStream};
 use crate::connection::mio::tun_source::TunSourceFd;
 use crate::connection::streams::{PendingWrite, Stream, StreamResult, WouldBlock};
 
@@ -81,7 +81,7 @@ impl Stream for TunStreamApple {
                     format!("Invalid packet: expected at least {} bytes, got {}", APPLE_TUN_PACKET_HEADER_LEN, bytes_read)
                 ))
             },
-            Err(e) => if e.kind() == io::ErrorKind::WouldBlock {
+            Err(e) => if is_would_block(&e) {
                 StreamResult::ok(0, WouldBlock::Yes, PendingWrite::No)
             } else {
                 StreamResult::Err(e)
@@ -115,14 +115,14 @@ impl Stream for TunStreamApple {
                 Ok(bytes_count) => {
                     bytes_written += bytes_count;
                 }
-                Err(e) if e.kind() == io::ErrorKind::WouldBlock => {
-                    if bytes_written >= APPLE_TUN_PACKET_HEADER_LEN {
-                        return StreamResult::ok(bytes_written - APPLE_TUN_PACKET_HEADER_LEN, WouldBlock::Yes, PendingWrite::No)
+                Err(e) if is_would_block(&e) => {
+                    return if bytes_written >= APPLE_TUN_PACKET_HEADER_LEN {
+                        StreamResult::ok(bytes_written - APPLE_TUN_PACKET_HEADER_LEN, WouldBlock::Yes, PendingWrite::No)
                     } else {
-                        return StreamResult::Err(io::Error::new(
+                        StreamResult::Err(io::Error::new(
                             io::ErrorKind::Other,
                             format!("Partial header write ({} bytes) before would-block", bytes_written)
-                        ));
+                        ))
                     }
                 }
                 Err(e) => return StreamResult::Err(e)

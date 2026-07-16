@@ -22,7 +22,7 @@ use mio::event;
 use mio::net::TcpStream;
 use pvpnclient::action::SocketOption;
 
-use crate::connection::mio::streams::MioStream;
+use crate::connection::mio::streams::{is_would_block, MioStream};
 use crate::connection::streams::{PendingWrite, Stream, StreamResult, WouldBlock};
 
 pub(crate) struct TcpSocketStream {
@@ -53,7 +53,7 @@ impl Stream for TcpSocketStream {
                     StreamResult::ok(bytes_count, WouldBlock::No, pending_write)
                 }
             },
-            Err(e) => if e.kind() == io::ErrorKind::WouldBlock {
+            Err(e) => if is_would_block(&e) {
                 StreamResult::ok(0, WouldBlock::Yes, pending_write)
             } else {
                 StreamResult::Err(e)
@@ -83,7 +83,7 @@ impl Stream for TcpSocketStream {
                 }
                 Err(e) => {
                     self.write_buffer.push_front(data);
-                    return if e.kind() == io::ErrorKind::WouldBlock {
+                    return if is_would_block(&e) {
                         StreamResult::ok(bytes_written, WouldBlock::Yes, PendingWrite::Yes)
                     } else {
                         StreamResult::Err(e)

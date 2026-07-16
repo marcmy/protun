@@ -18,6 +18,7 @@
 use std::io;
 use mio::{event, net::UdpSocket};
 use crate::connection::{mio::streams::MioStream, streams::{PendingWrite, Stream, StreamResult, WouldBlock}};
+use crate::connection::mio::streams::is_would_block;
 
 pub(crate) struct UdpSocketStream {
     sock: UdpSocket,
@@ -42,7 +43,7 @@ impl Stream for UdpSocketStream {
             Ok(bytes_count) => {
                 StreamResult::ok(bytes_count, WouldBlock::No, PendingWrite::No)
             }
-            Err(e) => if e.kind() == io::ErrorKind::WouldBlock {
+            Err(e) => if is_would_block(&e) {
                 StreamResult::ok(0, WouldBlock::Yes, PendingWrite::No)
             } else {
                 StreamResult::Err(e)
@@ -59,7 +60,7 @@ impl Stream for UdpSocketStream {
                 }
                 StreamResult::ok(size, WouldBlock::No, PendingWrite::No)
             }
-            Err(e) => if e.kind() == io::ErrorKind::WouldBlock {
+            Err(e) => if is_would_block(&e) {
                 StreamResult::ok(0, WouldBlock::Yes, PendingWrite::No)
             } else {
                 StreamResult::Err(e)
