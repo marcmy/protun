@@ -42,9 +42,9 @@ import uniffi.protun.LogLevel
  * ...
  * ```
  */
-class ProtonVpnCore private constructor(
-    val connectionManager: ProtonVpnConnectionManager,
-) {
+interface ProtonVpnCore {
+    val connectionManager: ProtonVpnConnectionManager
+
     companion object {
 
         /**
@@ -77,7 +77,7 @@ class ProtonVpnCore private constructor(
             val appContext = context.applicationContext
             val mainScope = MainScope()
 
-            val vpn = ProtonVpnCore(
+            val vpn = ProtonVpnCoreImpl(
                 ProtonVpnConnectionManagerImpl(mainScope, appContext, logger)
             )
 
@@ -97,6 +97,10 @@ class ProtonVpnCore private constructor(
         }
     }
 }
+
+internal class ProtonVpnCoreImpl(
+    override val connectionManager: ProtonVpnConnectionManager,
+) : ProtonVpnCore
 
 /**
  * Dependencies required by the library to operate within the host application.
