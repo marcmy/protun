@@ -120,6 +120,7 @@ impl LocalAgentHandler {
     pub(crate) fn on_connected_to_peer(&mut self, peer: &PeerConnectionInfo) {
         let new_peer = peer.clone();
         if let Some(last_peer) = &self.last_peer && new_peer != *last_peer {
+            log::info!("resetting local agent state. new peer connected {:?} -> {:?}", last_peer, new_peer);
             self.is_connected = false;
             self.established_ts = None;
             self.exit_label = None;
