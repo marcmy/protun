@@ -21,9 +21,8 @@ package me.proton.vpn.core.service
 
 import android.net.VpnService
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.launchIn
-import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.launch
 import me.proton.vpn.core.api.ConnectionMode
 import me.proton.vpn.core.api.ForkSelectorInfo
@@ -83,9 +82,13 @@ internal class ConnectionManager(
 
     fun init(serviceScope: CoroutineScope) {
         this.serviceScope = serviceScope
-        networkObserver.events.onEach { event ->
-            activeConnection?.connection?.onConnectivityChange(event)
-        }.launchIn(serviceScope)
+
+        // Start observing immediately to not lose any events emitted after this
+        serviceScope.launch(start = CoroutineStart.UNDISPATCHED) {
+            networkObserver.events.collect { event ->
+                activeConnection?.connection?.onConnectivityChange(event)
+            }
+        }
     }
 
     fun connect(
