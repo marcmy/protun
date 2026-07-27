@@ -28,17 +28,23 @@ import java.util.Date
 data class VpnState(
     val interfaceState: InterfaceState,
     val connectionState: VpnConnectionState,
+    val alwaysOn: Boolean?,
+    val isLockdownEnabled: Boolean?,
 ) : Parcelable {
     companion object {
 
         fun disconnectedWith(error: VpnDisconnectError) = VpnState(
             interfaceState = InterfaceState.Down(null),
-            connectionState = VpnConnectionState.Disconnected(error)
+            connectionState = VpnConnectionState.Disconnected(error),
+            alwaysOn = null,
+            isLockdownEnabled = null,
         )
 
         val Disconnected = VpnState(
             InterfaceState.Down(null),
-            VpnConnectionState.Disconnected()
+            VpnConnectionState.Disconnected(),
+            alwaysOn = null,
+            isLockdownEnabled = null,
         )
     }
 }

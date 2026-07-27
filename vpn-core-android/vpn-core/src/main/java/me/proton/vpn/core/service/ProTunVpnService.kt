@@ -132,6 +132,7 @@ internal class ProTunVpnService : VpnService() {
                     is VpnAction.Connect -> {
                         manager.connect(vpnAction.config, Builder(), socketProtectCallback, eventCallback)
                         if (Build.VERSION.SDK_INT >= 29) {
+                            manager.updateAlwaysOn(isAlwaysOn, isLockdownEnabled)
                             logger.log(LogLevel.INFO, "ProTunVpnService always-on=${isAlwaysOn} kill-switch=${isLockdownEnabled}")
                         }
                         true
@@ -193,12 +194,12 @@ internal class ProTunVpnService : VpnService() {
 
     private fun handleProcessRestore() =
         systemEventHandler.onProcessRestored().also {
-            logger.log(LogLevel.INFO, "ProTunVpnService.handleProcessRestore shouldRestart=$it")
+            logger.log(LogLevel.INFO, "ProTunVpnService.handleProcessRestore")
         }
 
     private fun handleAlwaysOn() =
         systemEventHandler.onAlwaysOnEnabled().also {
-            logger.log(LogLevel.INFO, "ProTunVpnService.handleAlwaysOn shouldRestart=$it")
+            logger.log(LogLevel.INFO, "ProTunVpnService.handleAlwaysOn")
         }
 
     //TODO(VPNAND-2287): not called for some reason when another VPN takes over

@@ -78,6 +78,9 @@ internal class ConnectionManager(
     var activeConnection: ActiveConnection? = null
         private set
 
+    private var isAlwaysOn : Boolean? = null
+    private var isLockdownEnabled : Boolean? = null
+
     val state = MutableStateFlow(VpnState.Disconnected)
 
     fun init(serviceScope: CoroutineScope) {
@@ -95,7 +98,7 @@ internal class ConnectionManager(
         config: InitialConfig,
         builder: VpnService.Builder,
         socketProtectCallback: ProTunSocketProtectCallback,
-        eventCallback: EventCallback
+        eventCallback: EventCallback,
     ) {
         val currentConfig = activeConnection?.currentConfig
         if (currentConfig != null) {
@@ -164,10 +167,19 @@ internal class ConnectionManager(
         }
     }
 
+    fun updateAlwaysOn(
+        isAlwaysOn: Boolean,
+        isLockdownEnabled: Boolean,
+    ) {
+        this.isAlwaysOn = isAlwaysOn
+        this.isLockdownEnabled = isLockdownEnabled
+        state.value = state.value.copy(alwaysOn = isAlwaysOn, isLockdownEnabled = isLockdownEnabled)
+    }
+
     fun clearConnection(endState: VpnConnectionState = VpnConnectionState.Disconnected()) {
         activeConnection?.clear()
         activeConnection = null
-        state.value = VpnState(InterfaceState.Down(null), endState)
+        state.value = VpnState(InterfaceState.Down(null), endState, null, null)
     }
 
     fun updateInterfaceConfig(interfaceConfig: InterfaceConfig, builder: VpnService.Builder) {
@@ -252,7 +264,12 @@ internal class ConnectionManager(
                 // - another VPN app took over the TUN interface -> disconnect with error
                 // - system closed the TUN interface due to resource constraints
                 val ipV6Enabled = activeConnection.currentConfig.interfaceConfig.supportInTunnelIPv6
-                state.value = VpnState(proTunState.interfaceState.toCoreApi(ipV6Enabled), connectionState)
+                state.value = VpnState(
+                    proTunState.interfaceState.toCoreApi(ipV6Enabled),
+                    connectionState,
+                    isAlwaysOn,
+                    isLockdownEnabled
+                )
             }
         }
     }
