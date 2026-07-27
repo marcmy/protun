@@ -35,7 +35,7 @@ use crate::{
     connection::{pvpn_client::PvpnClient, streams::{PendingWrite, PollResult, PollWaker, StreamResult, Streams, WouldBlock}},
     connection::time::RealtimeClock
 };
-use crate::api::connection::{PersistentCache, ConnectionMode, ConnectivityEvent, EventCallback, PcapFileInfo, StateChangedCallback, IpAddress, CacheKey, ConfigUpdate};
+use crate::api::connection::{PersistentCache, ConnectionMode, ConnectivityEvent, EventCallback, PcapFileInfo, StateChangedCallback, IpAddress, CacheKey, ConfigUpdate, SniStrategy};
 use crate::api::events::{CaptureStopReason, Event};
 use crate::api::state::{ConnectionState, InterfaceError, PeerConnectionWaitReason, VpnState};
 use crate::connection::network_recovery_handler::NetworkRecoveryHandler;
@@ -128,6 +128,7 @@ pub(crate) fn start_pvpn_connection(
                         ConnectionMode::NoLocalAgent { .. } => None,
                         ConnectionMode::LocalAgent { settings: local_agent_settings, .. } => Some(local_agent_settings),
                     },
+                    deps.config.sni_strategy,
                 );
                 connection.run()
             },
@@ -159,6 +160,7 @@ struct PvpnConnection {
     #[cfg(feature = "local-agent")]
     local_agent_handler: Option<LocalAgentHandler>,
     realtime_clock: RealtimeClock,
+    sni_strategy: SniStrategy,
 }
 impl PvpnConnection {
     fn new(
@@ -174,6 +176,7 @@ impl PvpnConnection {
         realtime_clock: RealtimeClock,
         #[cfg(feature = "local-agent")]
         local_agent_settings: Option<LocalAgentSettings>,
+        sni_strategy: SniStrategy,
     ) -> Self {
         #[cfg(feature = "local-agent")]
         let local_agent_handler = match local_agent_settings {
@@ -199,6 +202,7 @@ impl PvpnConnection {
             local_agent_handler,
             #[cfg(feature = "local-agent")]
             local_agent_settings: local_agent_settings.clone(),
+            sni_strategy,
         };
         for peer in &ret.peers {
             ret.client.peer_add(peer.as_peer());
@@ -219,7 +223,7 @@ impl PvpnConnection {
             for selector in LocalAgentHandler::local_agent_selectors_to_watch() {
                 ret.client.push_local_agent(LocalAgentAction::Watch(selector));
             }
-            ret.client.set_settings(pvpn_settings(local_agent_settings.into()));
+            ret.client.set_settings(pvpn_settings(local_agent_settings.into(), &ret.sni_strategy));
         }
         ret
     }
@@ -582,7 +586,7 @@ impl PvpnConnection {
         if let Some(current_settings) = &self.local_agent_settings {
             if *current_settings != settings {
                 self.local_agent_settings = Some(settings.clone());
-                self.client.set_settings(pvpn_settings(settings.into()));
+                self.client.set_settings(pvpn_settings(settings.into(), &self.sni_strategy));
             }
         } else {
             log::warn!("update_local_agent_settings called in non-local-agent mode");
@@ -710,10 +714,10 @@ impl From<VpnProtocol> for Protocol {
 }
 
 #[cfg(feature = "local-agent")]
-fn pvpn_settings(session_settings: SessionSettings) -> Settings {
+fn pvpn_settings(session_settings: SessionSettings, sni_strategy: &SniStrategy) -> Settings {
     Settings {
         authorized_protocols: vec![VpnProtocol::WireguardUdp, VpnProtocol::WireguardTcp, VpnProtocol::Stealth],
-        tls_snis: Default::default(),
+        tls_snis: sni_strategy.into(),
         session_settings,
     }
 }

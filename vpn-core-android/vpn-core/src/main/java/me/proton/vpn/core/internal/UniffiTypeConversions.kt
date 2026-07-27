@@ -40,6 +40,7 @@ import me.proton.vpn.core.api.LocalAgentSettings
 import me.proton.vpn.core.api.LocationCoordinates
 import me.proton.vpn.core.api.PeerConnectionWaitReason
 import me.proton.vpn.core.api.Restriction
+import me.proton.vpn.core.api.SniStrategy
 import me.proton.vpn.core.api.VpnConnectionEvent
 import me.proton.vpn.core.api.VpnDisconnectError
 import me.proton.vpn.core.api.VpnDisconnectError.*
@@ -214,6 +215,11 @@ fun ConnectionMode.toUniFFI(): uniffi.protun.ConnectionMode = when (this) {
         uniffi.protun.ConnectionMode.NoLocalAgent(clientX25519PrivateKeyBase64.decodeBase64())
     is ConnectionMode.LocalAgent ->
         uniffi.protun.ConnectionMode.LocalAgent(userAgent, appVersion, settings.toUniFFI(), MuonEnv.Prod)
+}
+
+fun SniStrategy.toUniFFI(): uniffi.protun.SniStrategy = when (this) {
+    SniStrategy.Random -> uniffi.protun.SniStrategy.RANDOM
+    SniStrategy.Top -> uniffi.protun.SniStrategy.TOP
 }
 
 fun Event.LocalAgentStats.toCoreApi() = LocalAgentStats(

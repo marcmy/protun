@@ -107,6 +107,7 @@ data class InitialConfig(
     val packetCaptureInfo: PacketCaptureInfo? = null,
 
     val mode: ConnectionMode,
+    val sniStrategy: SniStrategy
 ): Parcelable
 
 @Parcelize
@@ -190,3 +191,9 @@ data class ForkSelectorInfo(val selector: String, val cookies: List<Cookie>) : P
 
 @Parcelize
 data class Cookie(val name: String, val value: String) : Parcelable
+
+@Parcelize
+enum class SniStrategy : Parcelable {
+    Random,
+    Top
+}

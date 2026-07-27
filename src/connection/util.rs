@@ -16,8 +16,9 @@
 // along with ProtonVPN.  If not, see <https://www.gnu.org/licenses/>.
 
 use std::{io::ErrorKind, net::IpAddr, num::NonZeroU16};
-use pvpnclient::{os_interface::error::SystemError, peer::{Peer, PeerAddr}};
-use crate::api::connection::PeerInfo;
+use pvpnclient::{os_interface::error::SystemError, peer::{Peer, PeerAddr}, TlsSniStrategy};
+use crate::api::connection::{PeerInfo, SniStrategy};
+use crate::connection::constants::TOP_SNI_STRATEGY_URLS;
 
 pub(crate) fn error_kind_to_socket_err(error_kind: ErrorKind) -> SystemError {
     match error_kind {
@@ -83,5 +84,14 @@ impl PeerInfo {
             IpAddr::V6(addr) => (None, Some(addr)),
         };
         PeerAddr::try_from(peer_ip).expect("shouldn't happen")
+    }
+}
+
+impl From<&SniStrategy> for TlsSniStrategy {
+    fn from(value: &SniStrategy) -> Self {
+        match value {
+            SniStrategy::Random => TlsSniStrategy::Random,
+            SniStrategy::Top => TlsSniStrategy::List(TOP_SNI_STRATEGY_URLS.iter().map(|url| url.to_string()).collect())
+        }
     }
 }

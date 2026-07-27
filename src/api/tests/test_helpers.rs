@@ -44,7 +44,7 @@ use crate::{
         },
     },
 };
-use crate::api::connection::{CacheKey, ConnectionMode, EventCallback, MuonEnv, PersistentCache};
+use crate::api::connection::{CacheKey, ConnectionMode, EventCallback, MuonEnv, PersistentCache, SniStrategy};
 use crate::api::events::Event;
 use crate::connection::pvpn_connection::PvpnDependencies;
 use super::test_clocks::{TestMonotonicClock, TestRealtimeClock};
@@ -244,6 +244,7 @@ pub(crate) fn prepare_connection_test(
                 peers,
                 network_available,
                 pcap_file: None,
+                sni_strategy: SniStrategy::Random,
                 connection_mode: ConnectionMode::NoLocalAgent {
                     wg_private_key: WgClientPrivateKey(private_key)
                 },
@@ -402,6 +403,7 @@ pub(crate) fn prepare_local_agent_connection_test(
                 peers,
                 network_available,
                 pcap_file: None,
+                sni_strategy: SniStrategy::Random,
                 connection_mode: ConnectionMode::LocalAgent {
                     user_agent: "protun-test".to_string(),
                     app_version: "android-vpn@0.0.0".to_string(),

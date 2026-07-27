@@ -194,6 +194,14 @@ pub struct InitialConnectionConfig {
     pub network_available: bool,
     pub pcap_file: Option<PcapFileInfo>,
     pub connection_mode: ConnectionMode,
+    pub sni_strategy: SniStrategy,
+}
+
+#[cfg_attr(feature = "uniffi", derive(uniffi::Enum))]
+#[derive(Debug)]
+pub enum SniStrategy {
+    Random,
+    Top,
 }
 
 #[cfg_attr(feature = "uniffi", derive(uniffi::Enum))]

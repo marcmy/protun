@@ -142,6 +142,7 @@ internal class ConnectionManager(
                         networkAvailable = networkAvailable,
                         pcapFile = config.packetCaptureInfo?.toUniFFI(),
                         connectionMode = config.mode.toUniFFI(),
+                        sniStrategy = config.sniStrategy.toUniFFI(),
                     ),
                     tunFd = tunFd.detachFd(),
                     stateChangeCallback = stateChangeCallback,

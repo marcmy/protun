@@ -26,6 +26,7 @@ import me.proton.vpn.core.api.InterfaceConfig
 import me.proton.vpn.core.api.LocalAgentSettings
 import me.proton.vpn.core.api.NetShieldLevel
 import me.proton.vpn.core.api.Peer
+import me.proton.vpn.core.api.SniStrategy
 import me.proton.vpn.core.api.VpnProtocol
 import java.net.InetAddress
 
@@ -69,6 +70,7 @@ data class VpnConfig(
                     exitLabel = exitLabel,
                 )
             ),
+            sniStrategy = SniStrategy.Random,
             mode = if (localAgentMode) {
                 ConnectionMode.LocalAgent(
                     userAgent = "ProtonVPN/5.17.62.8 (Android 14; google sdk_gphone64_x86_64)",
