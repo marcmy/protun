@@ -186,6 +186,11 @@ internal class ProTunVpnService : VpnService() {
         return if (startSticky) START_STICKY else START_NOT_STICKY
     }
 
+    override fun onTrimMemory(level: Int) {
+        super.onTrimMemory(level)
+        logger.log(LogLevel.WARN, "ProTunVpnService: onTrimMemory level $level")
+    }
+
     private fun handleProcessRestore() =
         systemEventHandler.onProcessRestored().also {
             logger.log(LogLevel.INFO, "ProTunVpnService.handleProcessRestore shouldRestart=$it")
