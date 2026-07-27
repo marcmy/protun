@@ -45,6 +45,11 @@ import uniffi.protun.LogLevel
 interface ProtonVpnCore {
     val connectionManager: ProtonVpnConnectionManager
 
+    /**
+     * Clears persistent data cached for recent VPN session.
+     */
+    suspend fun clearCache()
+
     companion object {
 
         /**
@@ -100,7 +105,12 @@ interface ProtonVpnCore {
 
 internal class ProtonVpnCoreImpl(
     override val connectionManager: ProtonVpnConnectionManager,
-) : ProtonVpnCore
+) : ProtonVpnCore {
+
+    override suspend fun clearCache() {
+        DependencyContainer.cache.clear()
+    }
+}
 
 /**
  * Dependencies required by the library to operate within the host application.
