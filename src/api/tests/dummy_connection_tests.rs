@@ -127,6 +127,7 @@ fn happy_path_tcp_connection() {
     helper.expect_state(|state| matches!(&state.connection_state, ConnectionState::Disconnected { .. }));
 }
 
+#[cfg_attr(target_os = "macos", ignore = "requires multiple loopback addresses")]
 #[test_log::test]
 fn fallback_to_another_peer() {
     // create client with 2 peers
