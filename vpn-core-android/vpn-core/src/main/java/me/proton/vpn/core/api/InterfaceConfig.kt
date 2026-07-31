@@ -23,7 +23,7 @@ import android.os.Parcelable
 import kotlinx.parcelize.Parcelize
 import java.net.InetAddress
 
-private const val DEFAULT_MTU = 1460
+private const val DEFAULT_MTU = 1420
 private val FULL_RANGE_IPV4 = IpNetworkPrefix(InetAddress.getByName("0.0.0.0"), 0)
 private val FULL_RANGE_IPV6 = IpNetworkPrefix(InetAddress.getByName("::"), 0)
 
