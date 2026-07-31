@@ -178,6 +178,22 @@ impl ConnectionMode {
 
     pub(crate) fn to_pvpn_client_mode(self: &ConnectionMode, cache: &Box<dyn PersistentCache>) -> Result<PvpnClientMode, io::Error> {
         Ok(match self {
+            #[cfg(feature = "local-agent")]
+            ConnectionMode::NoLocalAgent { wg_private_key } => {
+                let wg_private_key : Option<WireguardPrivateKey> = match wg_private_key {
+                    Some(wg_private_key) => Some(wg_private_key.clone().into()),
+                    None => {
+                        if let Some(cached_key) = cache.get(CacheKey::PrivateKey) {
+                            Some(to_wireguard_private_key(cached_key)?)
+                        } else {
+                            None
+                        }
+                    }
+                };
+                PvpnClientMode::NoLocalAgent { wg_private_key }
+            },
+
+            #[cfg(not(feature = "local-agent"))]
             ConnectionMode::NoLocalAgent { wg_private_key } => PvpnClientMode::NoLocalAgent {
                 wg_private_key: wg_private_key.clone().into(),
             },
@@ -198,6 +214,13 @@ impl ConnectionMode {
             }
         })
     }
+}
+
+#[cfg(feature = "local-agent")]
+fn to_wireguard_private_key(private_key: Vec<u8>) -> Result<WireguardPrivateKey, io::Error> {
+    let ed25519 = to_private_key(private_key)?;
+    let (_, wg_key, _) = pvpnclient::util::derive_keys_from_ed25519_private_key(&ed25519);
+    Ok(wg_key)
 }
 
 #[cfg(feature = "local-agent")]

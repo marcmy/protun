@@ -212,7 +212,7 @@ fun Event.ConnectionStats.toCoreApi() = ConnectionStats(
 
 fun ConnectionMode.toUniFFI(): uniffi.protun.ConnectionMode = when (this) {
     is ConnectionMode.NoLocalAgent ->
-        uniffi.protun.ConnectionMode.NoLocalAgent(clientX25519PrivateKeyBase64.decodeBase64())
+        uniffi.protun.ConnectionMode.NoLocalAgent(clientX25519PrivateKeyBase64?.decodeBase64())
     is ConnectionMode.LocalAgent ->
         uniffi.protun.ConnectionMode.LocalAgent(userAgent, appVersion, settings.toUniFFI(), MuonEnv.Prod)
 }

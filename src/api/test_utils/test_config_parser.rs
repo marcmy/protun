@@ -82,9 +82,9 @@ pub fn parse_ini_config(path: String) -> Result<(ParsedConfig, Option<ParsedFork
             muon_env: muon_env
         }
     } else {
-        let key = ini_config["mode"]["client_private_key"].clone().unwrap();
-        let wg_private_key = WgClientPrivateKey(
-            byte_slice_from_base64(&key).try_into().unwrap()
+        let key = ini_config["mode"]["client_private_key"].clone();
+        let wg_private_key = key.map(|key|
+            WgClientPrivateKey(byte_slice_from_base64(&key).try_into().unwrap())
         );
         ConnectionMode::NoLocalAgent { wg_private_key }
     };

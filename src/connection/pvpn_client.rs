@@ -102,6 +102,9 @@ pub(crate) enum PvpnClientMode {
     },
 
     NoLocalAgent {
+        #[cfg(feature = "local-agent")]
+        wg_private_key: Option<WireguardPrivateKey>,
+        #[cfg(not(feature = "local-agent"))]
         wg_private_key: WireguardPrivateKey,
     },
 }
@@ -160,6 +163,15 @@ impl <'a> PvpnClientImpl<'a> {
                     .with_user_agent(user_agent);
                 builder.with_local_agent(private_key, certificate, muon_app.into(), muon_auth, Some(env))
             }
+            #[cfg(feature = "local-agent")]
+            PvpnClientMode::NoLocalAgent { wg_private_key } => {
+                if let Some(wg_private_key) = wg_private_key {
+                    builder.no_local_agent().with_wg_private_key(wg_private_key)
+                } else {
+                    builder.no_local_agent().with_new_random_wg_private_key()
+                }
+            }
+            #[cfg(not(feature = "local-agent"))]
             PvpnClientMode::NoLocalAgent { wg_private_key } => {
                 builder.no_local_agent().with_wg_private_key(wg_private_key)
             }

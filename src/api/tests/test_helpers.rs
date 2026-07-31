@@ -246,7 +246,7 @@ pub(crate) fn prepare_connection_test(
                 pcap_file: None,
                 sni_strategy: SniStrategy::Random,
                 connection_mode: ConnectionMode::NoLocalAgent {
-                    wg_private_key: WgClientPrivateKey(private_key)
+                    wg_private_key: Some(WgClientPrivateKey(private_key))
                 },
             };
 

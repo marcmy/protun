@@ -114,7 +114,8 @@ data class InitialConfig(
 sealed interface ConnectionMode: Parcelable {
 
     data class NoLocalAgent(
-        val clientX25519PrivateKeyBase64: String,
+        // If [clientX25519PrivateKeyBase64] is null library will use its own (and generate if needed).
+        val clientX25519PrivateKeyBase64: String?,
     ) : ConnectionMode
 
     data class LocalAgent(

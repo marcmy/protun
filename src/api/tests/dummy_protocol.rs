@@ -237,9 +237,9 @@ impl DummyPvpnClient {
             match &self.mode {
                 #[cfg(feature = "local-agent")]
                 PvpnClientMode::LocalAgent { .. } =>
-                    [255; 32].to_vec(),
+                    GENERATED_PRIVATE_KEY.to_vec(),
                 PvpnClientMode::NoLocalAgent { wg_private_key } =>
-                    wg_private_key.key.to_vec()
+                    wg_private_key.clone().map_or(GENERATED_PRIVATE_KEY.to_vec(), |key| key.key.to_vec())
             }
         )
     }
@@ -411,3 +411,5 @@ fn get_peer_addr(p: &Peer) -> PeerAddr {
         _ => panic!("no peer addr"),
     }
 }
+
+const GENERATED_PRIVATE_KEY : [u8; 32] = [255u8; 32];

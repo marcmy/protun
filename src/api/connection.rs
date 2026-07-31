@@ -209,8 +209,12 @@ pub enum SniStrategy {
 pub enum ConnectionMode {
 
     /// Local agent connection will not be established, and [ConnectionState::Connected] state
-    /// will be emitted as soon as WG connection is ready.
+    /// will be emitted as soon as WG connection is ready. If no [wg_private_key] is provided
+    /// one from [PersistentCache] will be used (and generated beforehand if missing).
     NoLocalAgent {
+        #[cfg(feature = "local-agent")]
+        wg_private_key: Option<WgClientPrivateKey>,
+        #[cfg(not(feature = "local-agent"))]
         wg_private_key: WgClientPrivateKey
     },
 
