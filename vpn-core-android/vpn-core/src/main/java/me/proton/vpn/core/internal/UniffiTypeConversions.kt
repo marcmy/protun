@@ -162,6 +162,7 @@ fun uniffi.protun.WaitJailReason.toCoreApi(): WaitJailReason = when (this) {
 fun uniffi.protun.AgentConnectionInfo.toCoreApi() = AgentConnectionInfo(
     serverExitV4 = serverExitV4,
     serverExitV6 = serverExitV6,
+    serverMTU = serverMtu?.toInt(),
     userIspIP = userIspIp,
     userIspCountryCode = userIspCountryCode,
     userIspName = userIspName,

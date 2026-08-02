@@ -199,6 +199,7 @@ data class PeerConnection(
 data class AgentConnectionInfo(
     val serverExitV4: String?,
     val serverExitV6: String?,
+    val serverMTU: Int?,
     val userIspIP: String?,
     val userIspCountryCode: String?,
     val userIspName: String?,

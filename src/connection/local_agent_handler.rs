@@ -156,6 +156,7 @@ impl LocalAgentHandler {
             LocalAgentSelector::InfoRemote,
             LocalAgentSelector::InfoRemoteReal,
             LocalAgentSelector::InfoRemoteRealLocationCode,
+            LocalAgentSelector::InfoTunnelMtu,
             LocalAgentSelector::Restrictions,
             LocalAgentSelector::SettingsCircumventionRouting,
             LocalAgentSelector::SettingsLabel,
@@ -192,6 +193,10 @@ impl LocalAgentHandler {
                 self.agent_info.server_exit_v4 = address.map(|v| IpAddress(v.into())),
             LocalAgentValue::InfoExitIpv6(address) =>
                 self.agent_info.server_exit_v6 = address.map(|v| IpAddress(v.into())),
+
+            LocalAgentValue::InfoTunnelMtu(value) => {
+                self.agent_info.server_mtu = value;
+            }
 
             LocalAgentValue::Restrictions(restrictions) => {
                 self.restrictions = if let Some(restrictions)  = restrictions {
@@ -243,6 +248,10 @@ impl LocalAgentHandler {
 
             LocalAgentValue::Jails(jails) =>
                 return self.handle_jails(jails),
+
+            _ => {
+                log::warn!("Unexpected LocalAgentValue variant {:?}", value);
+            },
         }
         None
     }

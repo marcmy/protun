@@ -51,6 +51,7 @@ pub enum NetshieldLevel {
 pub struct AgentConnectionInfo {
     pub server_exit_v4: Option<IpAddress>,
     pub server_exit_v6: Option<IpAddress>,
+    pub server_mtu: Option<u16>, // MTU as probed by the server
     pub user_isp_ip: Option<String>,
     pub user_isp_country_code: Option<String>,
     pub user_isp_name: Option<String>,
