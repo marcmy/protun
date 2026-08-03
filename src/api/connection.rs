@@ -160,6 +160,11 @@ impl Connection {
     pub fn provide_api_fork_selector(&self, fork_selector_info: ForkSelectorInfo) {
         (self.send_pvpn_message)(PvpnMessage::ProvideApiForkSelector(fork_selector_info))
     }
+    
+    #[cfg_attr(feature = "uniffi", uniffi::method)]
+    pub fn invalidate_certificate(&self) {
+        (self.send_pvpn_message)(PvpnMessage::InvalidateCertificate)
+    }
 }
 
 #[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
@@ -274,7 +279,8 @@ where
 pub trait PersistentCache: Send + Sync {
     fn put(&self, key: CacheKey, bytes: Vec<u8>);
     fn get(&self, key: CacheKey) -> Option<Vec<u8>>;
-    fn clear(&self);
+    fn remove(&self, key: CacheKey);
+    fn clear_all(&self);
 }
 
 #[cfg_attr(feature = "uniffi", derive(uniffi::Enum))]

@@ -167,6 +167,9 @@ internal class ProTunVpnService : VpnService() {
 
                                 is VpnAction.Update.ApiSelector ->
                                     manager.provideApiForkSelector(vpnAction.selector)
+
+                                VpnAction.Update.InvalidateCertificate ->
+                                    manager.invalidateCertificate()
                             }
                             true
                         } else {
@@ -233,6 +236,7 @@ internal class ProTunVpnService : VpnService() {
             @Parcelize data class ApiSelector(val selector: ForkSelectorInfo) : Update
             @Parcelize data object RequestConnectionStats : Update
             @Parcelize data object RequestLocalAgentStats : Update
+            @Parcelize data object InvalidateCertificate : Update
         }
     }
 

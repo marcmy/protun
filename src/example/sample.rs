@@ -118,11 +118,18 @@ impl PersistentCache for Cache {
             CacheKey::ApiSession => self.get_bytes(&self.api_session_stream),
         }
     }
+    fn clear_all(&self) {
+        self.remove(CacheKey::ApiSession);
+        self.remove(CacheKey::Certificate);
+        self.remove(CacheKey::PrivateKey);
+    }
 
-    fn clear(&self) {
-        let _ = self.cert_stream.write().unwrap().clear();
-        let _ = self.private_key_stream.write().unwrap().clear();
-        let _ = self.api_session_stream.write().unwrap().clear();
+    fn remove(&self, key: CacheKey) {
+        let _ = match key {
+            CacheKey::Certificate => self.cert_stream.write().unwrap().clear(),
+            CacheKey::PrivateKey => self.private_key_stream.write().unwrap().clear(),
+            CacheKey::ApiSession => self.api_session_stream.write().unwrap().clear(),
+        };
     }
 }
 

@@ -22,9 +22,6 @@ package me.proton.vpn.core.internal
 import android.content.Context
 import android.util.Base64
 import androidx.core.content.edit
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
 import me.proton.vpn.core.api.Logger
 import me.proton.vpn.core.api.PersistentCacheCipher
 import uniffi.protun.CacheKey
@@ -65,7 +62,13 @@ class PersistentCacheImpl(
         }
     }
 
-    override fun clear() {
+    override fun clearAll() {
         prefs.edit { clear() }
+    }
+
+    override fun remove(key: CacheKey) {
+        prefs.edit {
+            remove(key.name)
+        }
     }
 }

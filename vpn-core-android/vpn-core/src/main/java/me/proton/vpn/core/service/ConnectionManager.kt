@@ -221,6 +221,10 @@ internal class ConnectionManager(
         activeConnection?.connection?.provideApiForkSelector(selector.toUniFFI())
     }
 
+    fun invalidateCertificate() {
+        activeConnection?.connection?.invalidateCertificate()
+    }
+
     fun setPacketCaptureEnabled(packetCaptureInfo: PacketCaptureInfo?) {
         if (packetCaptureInfo == null)
             activeConnection?.connection?.stopPacketCapture()

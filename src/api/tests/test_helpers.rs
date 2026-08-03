@@ -100,8 +100,12 @@ impl PersistentCache for InMemoryCache {
         self.cache.read().unwrap().get(&key).cloned()
     }
 
-    fn clear(&self) {
+    fn clear_all(&self) {
         self.cache.write().unwrap().clear();
+    }
+
+    fn remove(&self, key: CacheKey) {
+        self.cache.write().unwrap().remove(&key);
     }
 }
 

@@ -81,6 +81,9 @@ interface ProtonVpnConnectionManager {
      */
     fun setPacketCaptureEnabled(packetCaptureInfo: PacketCaptureInfo?)
 
+    /** Invalidates stored certificate (to be used with user plan changes) */
+    fun invalidateCertificate()
+
     fun disconnect(error: VpnDisconnectError? = null)
 }
 

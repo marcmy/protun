@@ -56,11 +56,13 @@ import me.proton.vpn.core.api.VpnConnectionEvent
 import me.proton.vpn.core.api.VpnConnectionState
 import me.proton.vpn.core.api.VpnDisconnectError
 import me.proton.vpn.core.api.VpnState
+import me.proton.vpn.core.internal.DependencyContainer
 import me.proton.vpn.core.internal.tickFlow
 import me.proton.vpn.core.internal.toCoreApi
 import me.proton.vpn.core.service.ProTunVpnService
 import me.proton.vpn.core.service.ProTunVpnServiceBinder
 import me.proton.vpn.core.service.ProTunVpnServiceCallback
+import uniffi.protun.CacheKey
 import uniffi.protun.Event
 import uniffi.protun.LogLevel
 import kotlin.time.Duration
@@ -202,6 +204,13 @@ internal class ProtonVpnConnectionManagerImpl(
     override fun setPacketCaptureEnabled(packetCaptureInfo: PacketCaptureInfo?) {
         mainScope.launch {
             sendAction(ProTunVpnService.VpnAction.Update.PacketCapture(packetCaptureInfo))
+        }
+    }
+
+    override fun invalidateCertificate() {
+        mainScope.launch {
+            DependencyContainer.cache.remove(CacheKey.CERTIFICATE)
+            sendAction(ProTunVpnService.VpnAction.Update.InvalidateCertificate)
         }
     }
 

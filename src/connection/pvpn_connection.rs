@@ -85,6 +85,8 @@ pub(crate) enum PvpnMessage {
     ProvideApiForkSelector(ForkSelectorInfo),
     #[cfg(feature = "local-agent")]
     RequestLocalAgentStats,
+    #[cfg(feature = "local-agent")]
+    InvalidateCertificate,
 }
 
 pub(crate) type SendPvpnMessage = Arc<dyn Fn(PvpnMessage) + Send + Sync + 'static>;
@@ -310,7 +312,11 @@ impl PvpnConnection {
                     for selector in STATS_SELECTORS {
                         self.client.push_local_agent(LocalAgentAction::Get(*selector));
                     }
-                }
+                },
+                #[cfg(feature = "local-agent")]
+                PvpnMessage::InvalidateCertificate => {
+                    self.client.push_local_agent(LocalAgentAction::TriggerCertificateRefresh);
+                },
             }
         }
         !self.should_stop

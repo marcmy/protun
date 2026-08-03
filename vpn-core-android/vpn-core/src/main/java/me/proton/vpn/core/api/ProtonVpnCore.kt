@@ -108,7 +108,7 @@ internal class ProtonVpnCoreImpl(
 ) : ProtonVpnCore {
 
     override suspend fun clearCache() {
-        DependencyContainer.cache.clear()
+        DependencyContainer.cache.clearAll()
     }
 }
 
