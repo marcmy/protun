@@ -17,7 +17,7 @@
 
 use std::time::SystemTime;
 use muon::http;
-use crate::api::local_agent::{AgentConnectionInfo, Restriction, WaitJail, WaitJailReason};
+use crate::api::local_agent::{AgentConnectionInfo, Coordinates, Restriction, WaitJail, WaitJailReason};
 use crate::api::state::{AgentConnectionWaitReason, ConnectionState, PeerConnectionInfo};
 use pvpnclient::{HandledJail, LocalAgentSelector, LocalAgentValue, ToHandleJail};
 use pvpnclient::{Jail, Jails, LocalAgentError, LocalAgentMessage, LocalAgentServerError};
@@ -155,6 +155,7 @@ impl LocalAgentHandler {
             // LocalAgentSelector::InfoPlatform, // unused
             LocalAgentSelector::InfoRemote,
             LocalAgentSelector::InfoRemoteReal,
+            LocalAgentSelector::InfoRemoteRealLocation,
             LocalAgentSelector::InfoRemoteRealLocationCode,
             LocalAgentSelector::InfoTunnelMtu,
             LocalAgentSelector::Restrictions,
@@ -185,7 +186,10 @@ impl LocalAgentHandler {
             }
             LocalAgentValue::InfoRemoteReal(address) =>
                 self.agent_info.user_isp_ip = address,
-
+            LocalAgentValue::InfoRemoteRealLocation(value) =>
+                self.agent_info.user_isp_coordinates = value.map(|v|
+                    Coordinates { latitude: v.latitude, longitude: v.longitude }
+                ),
             LocalAgentValue::InfoRemoteRealLocationCode(code) =>
                 self.agent_info.user_isp_country_code = code,
 
