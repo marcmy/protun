@@ -15,6 +15,7 @@
 // You should have received a copy of the GNU General Public License
 // along with ProtonVPN.  If not, see <https://www.gnu.org/licenses/>.
 
+use crate::api::connection::{ConnectionMode, InitialConnectionConfig, PcapFileInfo, PeerInfo, SniStrategy};
 use crate::api::test_utils::muon_test_auth::get_session_fork_selector;
 use std::sync::Arc;
 use std::sync::mpsc::Receiver;
@@ -26,6 +27,7 @@ use crate::api::test_utils::test_config_parser::{parse_ini_config, ParsedConfig,
 use crate::api::tests::test_helpers::InMemoryCache;
 use std::collections::HashMap;
 use std::sync::RwLock;
+use crate::api::connection::ConnectionMode::NoLocalAgent;
 use crate::api::state::Protocol;
 
 enum TestMessage {
@@ -37,7 +39,7 @@ enum TestMessage {
 fn happy_path_unix_connection() {
     let (config, fork_config) = get_config();
 
-    connection_test_template(config, fork_config, |connection, receiver, fork_config| {
+    connection_test_template(config.initial_connection_config, fork_config, |connection, receiver, fork_config| {
         await_state(&receiver, &connection, &fork_config, |state| state.connection_state.is_connected());
 
         // Enable netshield
@@ -63,7 +65,7 @@ fn connect_tcp() {
     peer.tls_ports = vec![];
     config.initial_connection_config.peers = vec![peer];
 
-    connection_test_template(config, fork_config, |connection, receiver, fork_config| {
+    connection_test_template(config.initial_connection_config, fork_config, |connection, receiver, fork_config| {
         await_state(&receiver, &connection, &fork_config, |state| match &state.connection_state {
             ConnectionState::Connected { peer, .. } => peer.protocol == Protocol::WireguardTcp,
             _ => false
@@ -80,12 +82,30 @@ fn connect_stealth() {
     peer.tls_ports = vec![443];
     config.initial_connection_config.peers = vec![peer];
 
-    connection_test_template(config, fork_config, |connection, receiver, fork_config| {
+    connection_test_template(config.initial_connection_config, fork_config, |connection, receiver, fork_config| {
         await_state(&receiver, &connection, &fork_config, |state| match &state.connection_state {
             ConnectionState::Connected { peer, .. } => peer.protocol == Protocol::Stealth,
             _ => false
         });
     });
+}
+
+#[test_log::test]
+fn no_local_agent_connection() {
+    let (parsed_config, _) = get_config();
+    let config = InitialConnectionConfig {
+        peers: parsed_config.initial_connection_config.peers.clone(),
+        network_available: true,
+        pcap_file: None,
+        connection_mode: NoLocalAgent { wg_private_key: None },
+        sni_strategy: SniStrategy::Random,
+    };
+    connection_test_template(config, None, |connection, receiver, fork_config| {
+        await_state(&receiver, &connection, &fork_config, |state| match &state.connection_state {
+            ConnectionState::Connected { .. } => true,
+            _ => false
+        });
+    })
 }
 
 fn get_config() -> (ParsedConfig, Option<ParsedForkConfig>) {
@@ -95,7 +115,7 @@ fn get_config() -> (ParsedConfig, Option<ParsedForkConfig>) {
 }
 
 fn connection_test_template(
-    config: ParsedConfig,
+    config: InitialConnectionConfig,
     fork_config: Option<ParsedForkConfig>,
     block: fn(&Connection, &Receiver<TestMessage>, &Option<ParsedForkConfig>) -> (),
 ) {
@@ -105,8 +125,10 @@ fn connection_test_template(
     let cache_map = Arc::new(RwLock::new(HashMap::new()));
     let cache = Box::new(InMemoryCache { cache: cache_map.clone() });
 
+    let with_local_agent =
+        matches!(config.connection_mode, ConnectionMode::LocalAgent { .. });
     let connection = Connection::unix_connect(
-        config.initial_connection_config,
+        config,
         None, // no TUN
         Box::new(move |s| { let _ = sender_clone.send(TestMessage::State(s)); }),
         Box::new(move |e| { let _ = sender.send(TestMessage::Event(e)); }),
@@ -120,9 +142,11 @@ fn connection_test_template(
 
     // Verify that the cache is populated with session info.
     let cache_unlocked = cache_map.read().unwrap();
-    assert!(cache_unlocked.get(&CacheKey::Certificate).is_some());
+    if with_local_agent {
+        assert!(cache_unlocked.get(&CacheKey::Certificate).is_some());
+        assert!(cache_unlocked.get(&CacheKey::ApiSession).is_some());
+    }
     assert!(cache_unlocked.get(&CacheKey::PrivateKey).is_some());
-    assert!(cache_unlocked.get(&CacheKey::ApiSession).is_some());
 }
 
 fn await_state(
