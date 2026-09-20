@@ -17,6 +17,7 @@
 
 use std::fmt;
 use std::net::{Ipv4Addr, Ipv6Addr};
+use std::ptr::NonNull;
 use serde::{Deserialize, Serialize};
 use windows::Win32::Foundation::{ERROR_NOT_FOUND, ERROR_OBJECT_ALREADY_EXISTS, ERROR_OBJECT_NOT_FOUND, NO_ERROR, WIN32_ERROR};
 use windows::Win32::NetworkManagement::IpHelper::{CreateIpForwardEntry2, DeleteIpForwardEntry2, FreeMibTable, GetIpForwardTable2, InitializeIpForwardEntry, MIB_IPFORWARD_ROW2, MIB_IPFORWARD_TABLE2};
@@ -259,12 +260,12 @@ fn get_interface_rows(interface_index: u32) -> Vec<MIB_IPFORWARD_ROW2> {
         log::error!("Failed to get the routing table: {}", windows::core::Error::from_win32());
         return vec![];
     }
-    if table_ptr.is_null() {
+    let Some(table_ptr) = NonNull::new(table_ptr) else {
         log::error!("GetIpForwardTable2 returned a null routing table");
         return vec![];
-    }
+    };
 
-    let table: &MIB_IPFORWARD_TABLE2 = unsafe { &*table_ptr };
+    let table: &MIB_IPFORWARD_TABLE2 = unsafe { table_ptr.as_ref() };
     let count: usize = table.NumEntries as usize;
     let first_row: *const MIB_IPFORWARD_ROW2 = table.Table.as_ptr();
     let rows: &[MIB_IPFORWARD_ROW2] = unsafe { std::slice::from_raw_parts(first_row, count) };
@@ -275,7 +276,7 @@ fn get_interface_rows(interface_index: u32) -> Vec<MIB_IPFORWARD_ROW2> {
         .filter(|r| r.InterfaceIndex == interface_index)
         .collect();
 
-    unsafe { FreeMibTable(table_ptr as _) };
+    unsafe { FreeMibTable(table_ptr.as_ptr() as _) };
 
     filtered
 }

@@ -18,6 +18,7 @@
 use std::collections::HashMap;
 use std::fmt::{Display, Formatter};
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
+use std::ptr::NonNull;
 use windows::Win32::Foundation::{NO_ERROR, WIN32_ERROR};
 use windows::Win32::NetworkManagement::Ndis::{IfOperStatusUp, MediaConnectStateConnected, NET_IF_ADMIN_STATUS_UP};
 use windows::core::{Error, GUID};
@@ -121,21 +122,28 @@ fn get_potential_internet_interfaces() -> core::result::Result<Vec<InternetInter
         let mut routing_table: *mut MIB_IPFORWARD_TABLE2 = std::ptr::null_mut();
         GetIpForwardTable2(AF_UNSPEC, &mut routing_table).ok()
             .map_err(|e| ProTunFatalError::NoLocalIp(format!("Error when getting the routing table. Win32 error code: {}", e.code())))?;
-        if routing_table.is_null() {
-            return Err(ProTunFatalError::NoLocalIp("GetIpForwardTable2 returned a null routing table".to_string()));
-        }
-        let routes: &[MIB_IPFORWARD_ROW2] = std::slice::from_raw_parts((*routing_table).Table.as_ptr(), (*routing_table).NumEntries as usize);
+        let routing_table = NonNull::new(routing_table)
+            .ok_or_else(|| ProTunFatalError::NoLocalIp("GetIpForwardTable2 returned a null routing table".to_string()))?;
+        let routing_table_ref = routing_table.as_ref();
+        let routes: &[MIB_IPFORWARD_ROW2] = std::slice::from_raw_parts(
+            routing_table_ref.Table.as_ptr(),
+            routing_table_ref.NumEntries as usize,
+        );
 
         let mut ip_addresses_table: *mut MIB_UNICASTIPADDRESS_TABLE = std::ptr::null_mut();
         if let Err(e) = GetUnicastIpAddressTable(AF_UNSPEC, &mut ip_addresses_table).ok() {
-            FreeMibTable(routing_table as _);
+            FreeMibTable(routing_table.as_ptr() as _);
             return Err(ProTunFatalError::NoLocalIp(format!("Error when getting the unicast IP address table. Win32 error code: {}", e.code())));
         }
-        if ip_addresses_table.is_null() {
-            FreeMibTable(routing_table as _);
+        let Some(ip_addresses_table) = NonNull::new(ip_addresses_table) else {
+            FreeMibTable(routing_table.as_ptr() as _);
             return Err(ProTunFatalError::NoLocalIp("GetUnicastIpAddressTable returned a null address table".to_string()));
-        }
-        let ip_addresses: &[MIB_UNICASTIPADDRESS_ROW] = std::slice::from_raw_parts((*ip_addresses_table).Table.as_ptr(), (*ip_addresses_table).NumEntries as usize);
+        };
+        let ip_addresses_table_ref = ip_addresses_table.as_ref();
+        let ip_addresses: &[MIB_UNICASTIPADDRESS_ROW] = std::slice::from_raw_parts(
+            ip_addresses_table_ref.Table.as_ptr(),
+            ip_addresses_table_ref.NumEntries as usize,
+        );
 
         let mut ip_addresses_by_interface_luid: HashMap<InterfaceLuid, Vec<IpAddr>> = HashMap::new();
         for ip_address in ip_addresses {
@@ -152,8 +160,8 @@ fn get_potential_internet_interfaces() -> core::result::Result<Vec<InternetInter
 
         print_addresses(&valid_internet_interfaces);
 
-        FreeMibTable(routing_table as _);
-        FreeMibTable(ip_addresses_table as _);
+        FreeMibTable(routing_table.as_ptr() as _);
+        FreeMibTable(ip_addresses_table.as_ptr() as _);
 
         if valid_internet_interfaces.is_empty() {
             Err(ProTunFatalError::NoLocalIp("No valid local internet IP addresses".to_string()))
