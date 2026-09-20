@@ -1,0 +1,93 @@
+name: One-shot ProTun CodeQL pointer fixes
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/codeql-invalid-mib-pointers
+          fetch-depth: 0
+
+      - name: Add explicit Win32 table pointer validation
+        shell: bash
+        run: |
+          python <<'PY'
+          from pathlib import Path
+
+          path = Path("src/connection/windows/helpers/local_ip_finder.rs")
+          text = path.read_text()
+
+          old = '''        GetIpForwardTable2(AF_UNSPEC, &mut routing_table).ok()
+                      .map_err(|e| ProTunFatalError::NoLocalIp(format!("Error when getting the routing table. Win32 error code: {}", e.code())))?;
+                  let routes: &[MIB_IPFORWARD_ROW2] = std::slice::from_raw_parts((*routing_table).Table.as_ptr(), (*routing_table).NumEntries as usize);
+
+                  let mut ip_addresses_table: *mut MIB_UNICASTIPADDRESS_TABLE = std::ptr::null_mut();
+                  GetUnicastIpAddressTable(AF_UNSPEC, &mut ip_addresses_table).ok()
+                      .map_err(|e| ProTunFatalError::NoLocalIp(format!("Error when getting the unicast IP address table. Win32 error code: {}", e.code())))?;
+                  let ip_addresses: &[MIB_UNICASTIPADDRESS_ROW] = std::slice::from_raw_parts((*ip_addresses_table).Table.as_ptr(), (*ip_addresses_table).NumEntries as usize);
+          '''
+          new = '''        GetIpForwardTable2(AF_UNSPEC, &mut routing_table).ok()
+                      .map_err(|e| ProTunFatalError::NoLocalIp(format!("Error when getting the routing table. Win32 error code: {}", e.code())))?;
+                  if routing_table.is_null() {
+                      return Err(ProTunFatalError::NoLocalIp("GetIpForwardTable2 returned a null routing table".to_string()));
+                  }
+                  let routes: &[MIB_IPFORWARD_ROW2] = std::slice::from_raw_parts((*routing_table).Table.as_ptr(), (*routing_table).NumEntries as usize);
+
+                  let mut ip_addresses_table: *mut MIB_UNICASTIPADDRESS_TABLE = std::ptr::null_mut();
+                  if let Err(e) = GetUnicastIpAddressTable(AF_UNSPEC, &mut ip_addresses_table).ok() {
+                      FreeMibTable(routing_table as _);
+                      return Err(ProTunFatalError::NoLocalIp(format!("Error when getting the unicast IP address table. Win32 error code: {}", e.code())));
+                  }
+                  if ip_addresses_table.is_null() {
+                      FreeMibTable(routing_table as _);
+                      return Err(ProTunFatalError::NoLocalIp("GetUnicastIpAddressTable returned a null address table".to_string()));
+                  }
+                  let ip_addresses: &[MIB_UNICASTIPADDRESS_ROW] = std::slice::from_raw_parts((*ip_addresses_table).Table.as_ptr(), (*ip_addresses_table).NumEntries as usize);
+          '''
+          if old not in text:
+              raise SystemExit("local_ip_finder target block changed")
+          path.write_text(text.replace(old, new, 1))
+
+          path = Path("src/connection/windows/helpers/routing_table.rs")
+          text = path.read_text()
+          old = '''    let error: WIN32_ERROR = unsafe { GetIpForwardTable2(AF_UNSPEC, &mut table_ptr) };
+              if error != NO_ERROR || table_ptr.is_null() {
+                  log::error!("Failed to get the routing table: {}", windows::core::Error::from_win32());
+                  return vec![];
+              }
+
+              let table: &MIB_IPFORWARD_TABLE2 = unsafe { &*table_ptr };
+          '''
+          new = '''    let error: WIN32_ERROR = unsafe { GetIpForwardTable2(AF_UNSPEC, &mut table_ptr) };
+              if error != NO_ERROR {
+                  log::error!("Failed to get the routing table: {}", windows::core::Error::from_win32());
+                  return vec![];
+              }
+              if table_ptr.is_null() {
+                  log::error!("GetIpForwardTable2 returned a null routing table");
+                  return vec![];
+              }
+
+              let table: &MIB_IPFORWARD_TABLE2 = unsafe { &*table_ptr };
+          '''
+          if old not in text:
+              raise SystemExit("routing_table target block changed")
+          path.write_text(text.replace(old, new, 1))
+          PY
+
+      - name: Commit and push
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git diff --check
+          git add src/connection/windows/helpers/local_ip_finder.rs src/connection/windows/helpers/routing_table.rs
+          git commit -m "fix: validate Win32 MIB table pointers"
+          git push origin HEAD:fix/codeql-invalid-mib-pointers
