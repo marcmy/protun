@@ -255,8 +255,12 @@ fn get_interface_rows(interface_index: u32) -> Vec<MIB_IPFORWARD_ROW2> {
     let mut table_ptr: *mut MIB_IPFORWARD_TABLE2 = std::ptr::null_mut();
 
     let error: WIN32_ERROR = unsafe { GetIpForwardTable2(AF_UNSPEC, &mut table_ptr) };
-    if error != NO_ERROR || table_ptr.is_null() {
+    if error != NO_ERROR {
         log::error!("Failed to get the routing table: {}", windows::core::Error::from_win32());
+        return vec![];
+    }
+    if table_ptr.is_null() {
+        log::error!("GetIpForwardTable2 returned a null routing table");
         return vec![];
     }
 
