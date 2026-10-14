@@ -59,13 +59,16 @@ jobs:
           if [ "$status" -eq 0 ]; then
             echo "build_ok=true" >> "$GITHUB_OUTPUT"
             echo "### Rust compilation: passed" >> "$GITHUB_STEP_SUMMARY"
-          else
+          elif grep -Fq 'multiple different versions of crate `proton_os_interface`' "$RUNNER_TEMP/rust-check.log"; then
             echo "build_ok=false" >> "$GITHUB_OUTPUT"
-            echo "::warning title=Upstream Rust compilation blocked::pvpnclient/muon depend on incompatible proton-os-interface major-minor versions. See rust-compile-log artifact and docs/security-ci-baseline.md."
+            echo "::warning title=Known upstream Rust compilation failure::pvpnclient/muon resolve incompatible proton-os-interface versions. See rust-compile-log artifact and docs/security-ci-baseline.md."
             {
               echo "### Rust compilation: upstream incompatibility detected"
               echo "The upstream-dependent default build currently fails (exit code $status). This is **not** a passing Rust build. See the retained rust-compile-log artifact and docs/security-ci-baseline.md."
             } >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "::error title=Unexpected Rust compilation failure::See rust-compile-log artifact"
+            exit "$status"
           fi
       - name: Run library tests when compilation succeeds
         if: steps.compile.outputs.build_ok == 'true'
@@ -98,13 +101,17 @@ jobs:
           status=$?
           set -e
           echo "### RustSec dependency audit" >> "$GITHUB_STEP_SUMMARY"
+          if [ "$status" -ne 0 ] && ! jq -e '.vulnerabilities.list | type == "array"' "$RUNNER_TEMP/rustsec-report.json" > /dev/null 2>&1; then
+            echo "::error title=RustSec scan failed::No valid vulnerability report produced"
+            exit "$status"
+          fi
           if [ "$status" -ne 0 ]; then
             echo "::warning title=RustSec findings require review::The dependency graph contains known vulnerabilities. Download rustsec-report; findings have not been ignored or waived."
             echo "**Findings present (exit code $status).** Download the full rustsec-report artifact." >> "$GITHUB_STEP_SUMMARY"
           else
             echo "No dependency vulnerabilities reported." >> "$GITHUB_STEP_SUMMARY"
           fi
-          jq -r '.vulnerabilities.list[]? | "- \\(.advisory.id): \\(.advisory.title)"' "$RUNNER_TEMP/rustsec-report.json" >> "$GITHUB_STEP_SUMMARY" || true
+          jq -r '.vulnerabilities.list[]? | "- " + .advisory.id + ": " + .advisory.title' "$RUNNER_TEMP/rustsec-report.json" >> "$GITHUB_STEP_SUMMARY" || true
       - name: Preserve machine-readable RustSec report
         if: always()
         uses: actions/upload-artifact@v7
