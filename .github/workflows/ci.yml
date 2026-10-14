@@ -28,6 +28,17 @@ jobs:
       - name: Validate manifest without resolving dependencies
         run: cargo metadata --no-deps --format-version 1 > /dev/null
 
+  rust-core:
+    name: Rust core library without local-agent
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Check minimal library without optional local-agent
+        run: cargo check --lib --no-default-features --features unix
+
   rust-check:
     name: Rust compilation and library tests (baseline report)
     # Currently blocked by duplicate Proton interface crate versions in
@@ -42,6 +53,11 @@ jobs:
       # The manifest uses Proton's non-default Cargo registry. A 401/403
       # indicates registry access must be configured separately; do not add
       # long-lived credentials to workflows handling untrusted pull requests.
+      - name: Diagnose conflicting Proton interface dependencies
+        shell: bash
+        run: |
+          cargo tree -i 'proton-os-interface@0.2.7' || true
+          cargo tree -i 'proton-os-interface@0.3.5' || true
       - name: Check default Rust configuration
         run: cargo check --all-targets
       - name: Run library tests
