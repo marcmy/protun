@@ -1,0 +1,25 @@
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+
+  - package-ecosystem: cargo
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    # pvpnclient/muon are resolved from Proton's separate Cargo registry.
+    # A private-registry authentication requirement must be configured in
+    # Dependabot separately, never embedded in this file.
+
+  - package-ecosystem: gradle
+    directory: /vpn-core-android
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
