@@ -63,7 +63,7 @@ dependencies {
     implementation(libs.ini4j)
 
     implementation("androidx.datastore:datastore:1.1.7")
-    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.8.1")
+    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.11.0")
 
     testImplementation(libs.junit)
     androidTestImplementation(libs.ext.junit)
