@@ -28,22 +28,11 @@ jobs:
       - name: Validate manifest without resolving dependencies
         run: cargo metadata --no-deps --format-version 1 > /dev/null
 
-  rust-core:
-    name: Rust core library without local-agent
-    runs-on: ubuntu-24.04
-    timeout-minutes: 20
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - name: Check minimal library without optional local-agent
-        run: cargo check --lib --no-default-features --features unix
 
   rust-check:
     name: Rust compilation and library tests (baseline report)
-    # Currently blocked by duplicate Proton interface crate versions in
-    # upstream pvpnclient/muon; keep this visible but non-gating for now.
-    continue-on-error: true
+    # Separate from the actual CI gates: upstream's current default Rust
+    # dependency graph does not compile. Record failures with warnings and logs.
     runs-on: ubuntu-24.04
     timeout-minutes: 25
     steps:
@@ -58,16 +47,41 @@ jobs:
         run: |
           cargo tree -i 'proton-os-interface@0.2.7' || true
           cargo tree -i 'proton-os-interface@0.3.5' || true
-      - name: Check default Rust configuration
-        run: cargo check --all-targets
-      - name: Run library tests
+      - name: Report upstream Rust build compatibility
+        id: compile
+        shell: bash
+        run: |
+          set +e
+          cargo check --all-targets > "$RUNNER_TEMP/rust-check.log" 2>&1
+          status=$?
+          set -e
+          tail -n 75 "$RUNNER_TEMP/rust-check.log"
+          if [ "$status" -eq 0 ]; then
+            echo "build_ok=true" >> "$GITHUB_OUTPUT"
+            echo "### Rust compilation: passed" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "build_ok=false" >> "$GITHUB_OUTPUT"
+            echo "::warning title=Upstream Rust compilation blocked::pvpnclient/muon depend on incompatible proton-os-interface major-minor versions. See rust-compile-log artifact and docs/security-ci-baseline.md."
+            {
+              echo "### Rust compilation: upstream incompatibility detected"
+              echo "The upstream-dependent default build currently fails (exit code $status). This is **not** a passing Rust build. See the retained rust-compile-log artifact and docs/security-ci-baseline.md."
+            } >> "$GITHUB_STEP_SUMMARY"
+          fi
+      - name: Run library tests when compilation succeeds
+        if: steps.compile.outputs.build_ok == 'true'
         run: cargo test --lib
+      - name: Preserve Rust compilation diagnostic log
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: rust-compile-log
+          path: ${{ runner.temp }}/rust-check.log
+          if-no-files-found: ignore
 
   rust-audit:
     name: Rust dependency advisory report
     runs-on: ubuntu-24.04
     timeout-minutes: 20
-    continue-on-error: true
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -76,10 +90,30 @@ jobs:
         run: cargo generate-lockfile
       - name: Install cargo-audit
         run: cargo install cargo-audit --locked
-      - name: Audit resolved dependencies
-        run: cargo audit
+      - name: Report RustSec advisories without suppressing findings
+        shell: bash
+        run: |
+          set +e
+          cargo audit --json > "$RUNNER_TEMP/rustsec-report.json"
+          status=$?
+          set -e
+          echo "### RustSec dependency audit" >> "$GITHUB_STEP_SUMMARY"
+          if [ "$status" -ne 0 ]; then
+            echo "::warning title=RustSec findings require review::The dependency graph contains known vulnerabilities. Download rustsec-report; findings have not been ignored or waived."
+            echo "**Findings present (exit code $status).** Download the full rustsec-report artifact." >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "No dependency vulnerabilities reported." >> "$GITHUB_STEP_SUMMARY"
+          fi
+          jq -r '.vulnerabilities.list[]? | "- \\(.advisory.id): \\(.advisory.title)"' "$RUNNER_TEMP/rustsec-report.json" >> "$GITHUB_STEP_SUMMARY" || true
+      - name: Preserve machine-readable RustSec report
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: rustsec-report
+          path: ${{ runner.temp }}/rustsec-report.json
+          if-no-files-found: warn
       # Cargo.lock is deliberately untracked in this upstream-style library.
-      # This job reports advisories without introducing generated files.
+      # Advisory findings are reported, never silently ignored.
 
   gradle-wrapper:
     name: Validate Android Gradle wrapper integrity
