@@ -1,0 +1,70 @@
+name: Validate Rust and Android dependencies
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  rust-format:
+    name: Rust formatting and manifest
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install Rust formatting tools
+        run: rustup component add rustfmt
+      - name: Check Rust formatting
+        run: cargo fmt --all -- --check
+      - name: Validate manifest without resolving dependencies
+        run: cargo metadata --no-deps --format-version 1 > /dev/null
+
+  rust-check:
+    name: Rust compilation and library tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      # The manifest uses Proton's non-default Cargo registry. A 401/403
+      # indicates registry access must be configured separately; do not add
+      # long-lived credentials to workflows handling untrusted pull requests.
+      - name: Check default Rust configuration
+        run: cargo check --all-targets
+      - name: Run library tests
+        run: cargo test --lib
+
+  rust-audit:
+    name: Rust dependency advisory report
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Resolve dependencies for advisory check
+        run: cargo generate-lockfile
+      - name: Install cargo-audit
+        run: cargo install cargo-audit --locked
+      - name: Audit resolved dependencies
+        run: cargo audit
+      # Cargo.lock is deliberately untracked in this upstream-style library.
+      # This job reports advisories without introducing generated files.
+
+  gradle-wrapper:
+    name: Validate Android Gradle wrapper integrity
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: gradle/actions/wrapper-validation@v6
