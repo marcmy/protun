@@ -1,0 +1,133 @@
+name: Validate Rust and Android dependencies
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  rust-format:
+    name: Rust formatting and manifest
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install Rust formatting tools
+        run: rustup component add rustfmt
+      # Existing upstream sources are not rustfmt-clean; track this signal
+      # without blocking new security/manifest checks until they are normalized.
+      - name: Check Rust formatting (baseline report)
+        continue-on-error: true
+        run: cargo fmt --all -- --check
+      - name: Validate manifest without resolving dependencies
+        run: cargo metadata --no-deps --format-version 1 > /dev/null
+
+
+  rust-check:
+    name: Rust compilation and library tests (baseline report)
+    # Separate from the actual CI gates: upstream's current default Rust
+    # dependency graph does not compile. Record failures with warnings and logs.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      # The manifest uses Proton's non-default Cargo registry. A 401/403
+      # indicates registry access must be configured separately; do not add
+      # long-lived credentials to workflows handling untrusted pull requests.
+      - name: Diagnose conflicting Proton interface dependencies
+        shell: bash
+        run: |
+          cargo tree -i 'proton-os-interface@0.2.7' || true
+          cargo tree -i 'proton-os-interface@0.3.5' || true
+      - name: Report upstream Rust build compatibility
+        id: compile
+        shell: bash
+        run: |
+          set +e
+          cargo check --all-targets > "$RUNNER_TEMP/rust-check.log" 2>&1
+          status=$?
+          set -e
+          tail -n 75 "$RUNNER_TEMP/rust-check.log"
+          if [ "$status" -eq 0 ]; then
+            echo "build_ok=true" >> "$GITHUB_OUTPUT"
+            echo "### Rust compilation: passed" >> "$GITHUB_STEP_SUMMARY"
+          elif grep -Fq 'multiple different versions of crate `proton_os_interface`' "$RUNNER_TEMP/rust-check.log"; then
+            echo "build_ok=false" >> "$GITHUB_OUTPUT"
+            echo "::warning title=Known upstream Rust compilation failure::pvpnclient/muon resolve incompatible proton-os-interface versions. See rust-compile-log artifact and docs/security-ci-baseline.md."
+            {
+              echo "### Rust compilation: upstream incompatibility detected"
+              echo "The upstream-dependent default build currently fails (exit code $status). This is **not** a passing Rust build. See the retained rust-compile-log artifact and docs/security-ci-baseline.md."
+            } >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "::error title=Unexpected Rust compilation failure::See rust-compile-log artifact"
+            exit "$status"
+          fi
+      - name: Run library tests when compilation succeeds
+        if: steps.compile.outputs.build_ok == 'true'
+        run: cargo test --lib
+      - name: Preserve Rust compilation diagnostic log
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: rust-compile-log
+          path: ${{ runner.temp }}/rust-check.log
+          if-no-files-found: ignore
+
+  rust-audit:
+    name: Rust dependency advisory report
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Resolve dependencies for advisory check
+        run: cargo generate-lockfile
+      - name: Install cargo-audit
+        run: cargo install cargo-audit --locked
+      - name: Report RustSec advisories without suppressing findings
+        shell: bash
+        run: |
+          set +e
+          cargo audit --json > "$RUNNER_TEMP/rustsec-report.json"
+          status=$?
+          set -e
+          echo "### RustSec dependency audit" >> "$GITHUB_STEP_SUMMARY"
+          if [ "$status" -ne 0 ] && ! jq -e '.vulnerabilities.list | type == "array"' "$RUNNER_TEMP/rustsec-report.json" > /dev/null 2>&1; then
+            echo "::error title=RustSec scan failed::No valid vulnerability report produced"
+            exit "$status"
+          fi
+          if [ "$status" -ne 0 ]; then
+            echo "::warning title=RustSec findings require review::The dependency graph contains known vulnerabilities. Download rustsec-report; findings have not been ignored or waived."
+            echo "**Findings present (exit code $status).** Download the full rustsec-report artifact." >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "No dependency vulnerabilities reported." >> "$GITHUB_STEP_SUMMARY"
+          fi
+          jq -r '.vulnerabilities.list[]? | "- " + .advisory.id + ": " + .advisory.title' "$RUNNER_TEMP/rustsec-report.json" >> "$GITHUB_STEP_SUMMARY" || true
+      - name: Preserve machine-readable RustSec report
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: rustsec-report
+          path: ${{ runner.temp }}/rustsec-report.json
+          if-no-files-found: warn
+      # Cargo.lock is deliberately untracked in this upstream-style library.
+      # Advisory findings are reported, never silently ignored.
+
+  gradle-wrapper:
+    name: Validate Android Gradle wrapper integrity
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: gradle/actions/wrapper-validation@v6
