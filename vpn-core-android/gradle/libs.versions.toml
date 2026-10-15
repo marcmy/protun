@@ -19,7 +19,7 @@ minCompileSdk = "35"
 compileSdk = "36"
 
 [libraries]
-androidx-annotation = { group = "androidx.annotation", name = "annotation", version = "1.9.1" }
+androidx-annotation = { group = "androidx.annotation", name = "annotation", version = "1.11.0" }
 androidx-core = { group = "androidx.core", name = "core", version = "1.19.1" }
 coroutines-core = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-core", version.ref = "coroutines" }
 coroutines-android = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-android", version.ref = "coroutines" }
