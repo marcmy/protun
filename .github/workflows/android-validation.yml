@@ -1,0 +1,55 @@
+name: Android Gradle validation
+
+on:
+  pull_request:
+    paths:
+      - 'vpn-core-android/**'
+      - '.github/workflows/android-validation.yml'
+  push:
+    branches: [master]
+    paths:
+      - 'vpn-core-android/**'
+      - '.github/workflows/android-validation.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  android-gradle:
+    name: Android Gradle plugin and dependency validation
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    env:
+      ORG_GRADLE_PROJECT_protunCoreVersionName: 0.1.0-ci
+    steps:
+      - name: Checkout repository and version tags
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Set up JDK 17
+        uses: actions/setup-java@dded0888837ed1f317902acf8a20df0ad188d165 # v5.0.0
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Install Android NDK required by upstream Gradle project
+        shell: bash
+        run: |
+          SDK_ROOT="${ANDROID_HOME:-/usr/local/lib/android/sdk}"
+          SDKMANAGER="$(find "$SDK_ROOT/cmdline-tools" -maxdepth 3 -type f -name sdkmanager | sort -V | tail -n 1)"
+          test -n "$SDKMANAGER" || { echo "::error::Android sdkmanager missing"; exit 1; }
+          yes | "$SDKMANAGER" --licenses >/dev/null || true
+          "$SDKMANAGER" --install "ndk;28.1.13356709"
+      - name: Validate Gradle plugins and project configuration
+        working-directory: vpn-core-android
+        shell: bash
+        run: |
+          chmod +x ./gradlew
+          ./gradlew --no-daemon :sample-app:help
+      - name: Resolve sample app compile dependencies
+        working-directory: vpn-core-android
+        run: ./gradlew --no-daemon :sample-app:dependencies --configuration debugCompileClasspath
+      - name: Resolve sample app runtime dependencies
+        working-directory: vpn-core-android
+        run: ./gradlew --no-daemon :sample-app:dependencies --configuration debugRuntimeClasspath
