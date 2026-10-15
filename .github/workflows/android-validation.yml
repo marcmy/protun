@@ -33,6 +33,11 @@ jobs:
         with:
           distribution: temurin
           java-version: '17'
+      - name: Install Android NDK required by upstream Gradle project
+        shell: bash
+        run: |
+          yes | sdkmanager --licenses >/dev/null || true
+          sdkmanager --install "ndk;28.1.13356709"
       - name: Validate Gradle plugins and project configuration
         working-directory: vpn-core-android
         shell: bash
