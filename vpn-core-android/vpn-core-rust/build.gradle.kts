@@ -94,7 +94,6 @@ cargo {
     features {
         defaultAnd(extraCargoFeatures.toTypedArray())
     }
-    prebuiltToolchains = true
     apiLevel = 25
     profile = rustProfile
 }
