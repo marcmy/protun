@@ -23,6 +23,12 @@ plugins {
     alias(coreLibs.plugins.kotlin.android)
 }
 
+kotlin {
+    compilerOptions {
+        jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17)
+    }
+}
+
 android {
     namespace = "me.proton.vpn.core_rust"
     compileSdk = coreLibs.versions.compileSdk.get().toInt()
@@ -51,9 +57,6 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
 
-    kotlinOptions {
-        jvmTarget = "17"
-    }
 }
 
 val rustCrateName = "protun"
