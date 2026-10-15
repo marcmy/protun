@@ -32,6 +32,12 @@ private val versionName = findProperty("protunCoreVersionName") as? String ?: ge
 
 private val githubRepo = "github.com/ProtonVPN/protun"
 
+kotlin {
+    compilerOptions {
+        jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_11)
+    }
+}
+
 android {
     namespace = "me.proton.vpn.core"
     compileSdk = coreLibs.versions.compileSdk.get().toInt()
@@ -65,9 +71,6 @@ android {
         targetCompatibility = JavaVersion.VERSION_11
     }
 
-    kotlinOptions {
-        jvmTarget = "11"
-    }
 
     mavenPublishing {
         publishToMavenCentral(automaticRelease = true)
