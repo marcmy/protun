@@ -37,7 +37,13 @@ jobs:
           SDKMANAGER="$(find "$SDK_ROOT/cmdline-tools" -maxdepth 3 -type f -name sdkmanager | sort -V | tail -n 1)"
           test -n "$SDKMANAGER" || { echo "::error::Android sdkmanager missing"; exit 1; }
           yes | "$SDKMANAGER" --licenses > /dev/null || true
-          "$SDKMANAGER" --install "ndk;28.1.13356709" "platforms;android-37" "build-tools;36.0.0"
+          "$SDKMANAGER" --install "ndk;28.1.13356709" "platforms;android-37.0" "build-tools;36.0.0"
+          # Existing Gradle DSL resolves API 37 by major version; expose the SDK
+          # installed with the official minor-versioned package name.
+          test -d "$SDK_ROOT/platforms/android-37.0"
+          if [ ! -e "$SDK_ROOT/platforms/android-37" ]; then
+            ln -s android-37.0 "$SDK_ROOT/platforms/android-37"
+          fi
       - name: Install Android ARM64 Rust target
         run: rustup target add aarch64-linux-android
       - name: Compile genuine Android ARM64 native library
