@@ -16,7 +16,7 @@ composeBom = "2026.09.00"
 
 minSdk = "25"
 minCompileSdk = "35"
-compileSdk = "36"
+compileSdk = "37"
 
 [libraries]
 androidx-annotation = { group = "androidx.annotation", name = "annotation", version = "1.11.0" }

@@ -37,7 +37,7 @@ jobs:
           SDKMANAGER="$(find "$SDK_ROOT/cmdline-tools" -maxdepth 3 -type f -name sdkmanager | sort -V | tail -n 1)"
           test -n "$SDKMANAGER" || { echo "::error::Android sdkmanager missing"; exit 1; }
           yes | "$SDKMANAGER" --licenses > /dev/null || true
-          "$SDKMANAGER" --install "ndk;28.1.13356709" "platforms;android-36" "build-tools;36.0.0"
+          "$SDKMANAGER" --install "ndk;28.1.13356709" "platforms;android-37" "build-tools;36.0.0"
       - name: Install Android ARM64 Rust target
         run: rustup target add aarch64-linux-android
       - name: Compile genuine Android ARM64 native library
