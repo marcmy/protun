@@ -71,7 +71,7 @@ interface ProtonVpnConnectionManager {
     fun connect(config: InitialConfig)
     fun updateInterfaceConfig(interfaceConfig: InterfaceConfig)
     fun updateLocalAgentSettings(localAgentSettings: LocalAgentSettings)
-    fun updateApiSelector(selector: String)
+    fun updateApiSelector(selector: ApiSelectorInfo)
     fun updatePeers(peers: List<Peer>)
 
     /**
