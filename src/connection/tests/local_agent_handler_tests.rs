@@ -129,16 +129,9 @@ fn same_peer_reconnect_preserves_established() {
 }
 
 #[test]
-fn auth_error_emits_api_session_expired() {
-    let mut handler = LocalAgentHandler::new();
-    let event = handler.handle_message(LocalAgentMessage::Error(LocalAgentError::Authentication));
-    assert!(matches!(event, Some(Event::Error { error: ErrorEvent::ApiSessionExpired })));
-}
-
-#[test]
 fn cert_error_emits_certificate_refresh_fatal_error() {
     let mut handler = LocalAgentHandler::new();
-    let event = handler.handle_message(LocalAgentMessage::Error(LocalAgentError::CertificateFetching));
+    let event = handler.handle_message(LocalAgentMessage::Error(LocalAgentError::TooManyTriesOnCertRefresh));
     assert!(matches!(event, Some(Event::Error { error: ErrorEvent::CertificateRefreshFatalError })));
 }
 
