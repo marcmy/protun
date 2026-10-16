@@ -1,0 +1,70 @@
+name: Android ARM64 native artifact and Kotlin bindings
+
+on:
+  pull_request:
+    paths:
+      - Cargo.toml
+      - 'src/**'
+      - 'vpn-core-android/**'
+      - '.github/workflows/android-native-artifact.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  native-android:
+    name: Cross-compile Rust and compile Android Kotlin
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    env:
+      ORG_GRADLE_PROJECT_protunCoreVersionName: 0.1.0-ci
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - name: Set up JDK 17
+        uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Install Android SDK and NDK
+        shell: bash
+        run: |
+          SDK_ROOT="${ANDROID_HOME:-/usr/local/lib/android/sdk}"
+          SDKMANAGER="$(find "$SDK_ROOT/cmdline-tools" -maxdepth 3 -type f -name sdkmanager | sort -V | tail -n 1)"
+          test -n "$SDKMANAGER" || { echo "::error::Android sdkmanager missing"; exit 1; }
+          yes | "$SDKMANAGER" --licenses > /dev/null || true
+          "$SDKMANAGER" --install "ndk;28.1.13356709" "platforms;android-36" "build-tools;36.0.0"
+      - name: Install Android ARM64 Rust target
+        run: rustup target add aarch64-linux-android
+      - name: Compile genuine Android ARM64 native library
+        shell: bash
+        run: |
+          NDK_ROOT="${ANDROID_HOME:-/usr/local/lib/android/sdk}/ndk/28.1.13356709"
+          BIN="$NDK_ROOT/toolchains/llvm/prebuilt/linux-x86_64/bin"
+          export CC_aarch64_linux_android="$BIN/aarch64-linux-android25-clang"
+          export AR_aarch64_linux_android="$BIN/llvm-ar"
+          export CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER="$BIN/aarch64-linux-android25-clang"
+          test -x "$CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER"
+          cargo build --release --target aarch64-linux-android --features android,uniffi,test_utils
+          test -s target/aarch64-linux-android/release/libprotun.so
+          file target/aarch64-linux-android/release/libprotun.so
+      - name: Generate UniFFI Kotlin bindings from native artifact
+        shell: bash
+        run: |
+          cargo run --release --features uniffi --bin uniffi-bindgen -- \
+            generate --library target/aarch64-linux-android/release/libprotun.so \
+            --language kotlin --config uniffi.toml \
+            --out-dir vpn-core-android/vpn-core-rust/build/generated/uniffi/java
+          test -d vpn-core-android/vpn-core-rust/build/generated/uniffi/java/uniffi/protun
+      - name: Compile Android sample and library Kotlin source
+        working-directory: vpn-core-android
+        shell: bash
+        run: |
+          chmod +x ./gradlew
+          ./gradlew --no-daemon :sample-app:compileDebugKotlin \
+            -x :vpn-core-rust:cargoBuild \
+            -x :vpn-core-rust:generateUniFFIBindings
