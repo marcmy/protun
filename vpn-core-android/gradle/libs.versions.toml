@@ -1,7 +1,7 @@
 [versions]
-agp = "8.13.2"
+agp = "9.4.1"
 coroutines = "1.11.0"
-hilt = "2.58"
+hilt = "2.60.1"
 ini4j = "0.5.4"
 kotlin = "2.4.21"
 ksp = "2.3.12"
@@ -53,4 +53,4 @@ ksp = { id = "com.google.devtools.ksp", version.ref = "ksp" }
 rustandroid = { id = "org.mozilla.rust-android-gradle.rust-android", version = "0.10.0" }
 android-application = { id = "com.android.application", version.ref = "agp" }
 kotlin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
-vanniktech-mavenpublish = { id = "com.vanniktech.maven.publish", version = "0.35.0" }
+vanniktech-mavenpublish = { id = "com.vanniktech.maven.publish", version = "0.37.0" }
