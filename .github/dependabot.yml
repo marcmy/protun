@@ -1,4 +1,14 @@
 version: 2
+
+# Proton's published Rust registry is readable without credentials.
+# Explicitly registering the host allows Dependabot's outbound proxy to
+# connect to it; Cargo's own .cargo/config.toml does not allow the host.
+registries:
+  proton:
+    type: cargo-registry
+    registry: proton
+    url: https://rust-registry.proton.me/index/
+
 updates:
   - package-ecosystem: github-actions
     directory: /
@@ -13,9 +23,8 @@ updates:
       interval: weekly
       day: monday
     open-pull-requests-limit: 5
-    # pvpnclient/muon are resolved from Proton's separate Cargo registry.
-    # A private-registry authentication requirement must be configured in
-    # Dependabot separately, never embedded in this file.
+    registries:
+      - proton
 
   - package-ecosystem: gradle
     directory: /vpn-core-android
