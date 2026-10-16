@@ -53,3 +53,12 @@ jobs:
       - name: Resolve sample app runtime dependencies
         working-directory: vpn-core-android
         run: ./gradlew --no-daemon :sample-app:dependencies --configuration debugRuntimeClasspath
+      - name: Generate Maven POM without publishing or signing
+        working-directory: vpn-core-android
+        run: |
+          ./gradlew --no-daemon :vpn-core:generatePomFileForMavenPublication
+          POM="vpn-core/build/publications/maven/pom-default.xml"
+          test -s "$POM"
+          grep -q '<groupId>me.proton.vpn</groupId>' "$POM"
+          grep -q '<artifactId>vpn-core</artifactId>' "$POM"
+          grep -q '<version>0.1.0-ci</version>' "$POM"
