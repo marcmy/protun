@@ -237,6 +237,7 @@ impl LocalAgentHandler {
 
             LocalAgentValue::Jails(jails) =>
                 return self.handle_jails(jails),
+            _ => log::warn!("Ignoring unrecognized local agent value: {:?}", value),
         }
         None
     }
@@ -292,10 +293,17 @@ impl LocalAgentHandler {
     
     fn handle_error(&mut self, error: LocalAgentError) -> Option<Event> {
         match error {
-            LocalAgentError::Authentication =>
-                return Some(Event::Error { error: ErrorEvent::ApiSessionExpired }),
+            LocalAgentError::MuonAuth(error) => {
+                log::warn!("Local agent authentication failed: {:?}", error);
+                return Some(Event::Error { error: ErrorEvent::ApiSessionExpired });
+            }
 
-            LocalAgentError::CertificateFetching =>
+            LocalAgentError::MuonErrorOnCertRefresh(error) => {
+                log::warn!("Local agent certificate refresh failed: {:?}", error);
+                return Some(Event::Error { error: ErrorEvent::CertificateRefreshFatalError });
+            }
+
+            LocalAgentError::TooManyTriesOnCertRefresh =>
                 return Some(Event::Error { error: ErrorEvent::CertificateRefreshFatalError }),
 
             LocalAgentError::ServerError(e) => {

@@ -18,6 +18,10 @@
 use std::{io, net::IpAddr, str::FromStr};
 
 use pvpnclient::{stats::TunnelStats, vpn::{WireguardPrivateKey, WireguardPublicKey}};
+#[cfg(feature = "local-agent")]
+use pvpnclient::{cookie_store::RawCookie, MuonCookies};
+#[cfg(feature = "local-agent")]
+use crate::api::connection::{Cookie, Cookies};
 
 use crate::api::connection::{CLIENT_PRIV_KEY_SIZE_BYTES, IpAddress, PEER_PUB_KEY_SIZE_BYTES, WgClientPrivateKey, WgPeerPublicKey, ConnectionMode, CacheKey, PersistentCache};
 use crate::api::events::Event;
@@ -219,5 +223,18 @@ fn to_muon_auth(data: Vec<u8>) -> Result<MuonAuth, io::Error> {
         Ok(key) => Ok(key),
         Err(e) =>
             Err(io::Error::new(io::ErrorKind::InvalidData, format!("Failed to parse muon auth: {e:?}"))),
+    }
+}
+#[cfg(feature = "local-agent")]
+impl From<&Cookie> for RawCookie<'_> {
+    fn from(value: &Cookie) -> Self {
+        RawCookie::new(value.name.clone(), value.value.clone())
+    }
+}
+
+#[cfg(feature = "local-agent")]
+impl From<Cookies> for MuonCookies {
+    fn from(value: Cookies) -> Self {
+        value.items.iter().map(Into::into).collect()
     }
 }

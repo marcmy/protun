@@ -103,7 +103,7 @@ impl <'a> PvpnClientImpl<'a> {
                 let muon_app = muon::App::new(app_version)
                     .map_err(|e| io::Error::new(ErrorKind::Other, e))?
                     .with_user_agent(user_agent);
-                builder.with_local_agent(private_key, certificate, muon_app.into(), auth)
+                builder.with_local_agent(private_key, certificate, muon_app.into(), auth, Some(muon::Environment::new_prod()))
             }
             PvpnClientMode::NoLocalAgent { wg_private_key } => {
                 builder.no_local_agent().with_wg_private_key(wg_private_key)
