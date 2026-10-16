@@ -1,0 +1,33 @@
+name: Rust compatibility (strict)
+
+on:
+  pull_request:
+    paths:
+      - Cargo.toml
+      - 'src/**'
+      - '.github/workflows/rust-compatibility.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  rust-compile:
+    name: Compile actual Rust library and tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Resolve the Proton dependency graph
+        run: |
+          cargo tree -i 'proton-os-interface@0.2.7' || true
+          cargo tree -i 'proton-os-interface@0.3.5' || true
+      - name: Require host Rust library to compile
+        run: cargo check --lib
+      - name: Require Android-feature Rust library to compile
+        run: cargo check --lib --features android,uniffi,test_utils
+      - name: Require Rust library tests to pass
+        run: cargo test --lib
