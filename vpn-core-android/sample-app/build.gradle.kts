@@ -15,7 +15,7 @@ kotlin {
 
 android {
     namespace = "me.proton.vpn.core.sample_app"
-    compileSdk = 36
+    compileSdk = 37
 
     defaultConfig {
         applicationId = "me.proton.vpn.core.sample_app"

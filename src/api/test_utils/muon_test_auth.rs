@@ -21,6 +21,10 @@ use std::pin::Pin;
 use async_compat::Compat;
 use futures::TryFutureExt as _;
 use muon::App;
+use muon::cookie_store::{CookieStore, CookieStoreSetResult};
+use pvpnclient::{cookie_store, url::Url};
+use crate::api::connection::{Cookie, Cookies, ForkSelectorInfo};
+use std::sync::{Arc, RwLock};
 use muon::auth::LoginFlow;
 use muon::rt::{
     Monotonic, MuonSystemTime, OperatingSystem, Resolve, SinceUnixEpoch as _, SystemTimeFactory,
@@ -129,6 +133,31 @@ impl OperatingSystem for MyOperatingSystem {
     }
 }
 
+#[derive(Debug)]
+pub struct MuonCookieStore {
+    cookies: Arc<RwLock<Vec<cookie_store::RawCookie<'static>>>>,
+}
+
+impl MuonCookieStore {
+    pub fn new(cookies: Arc<RwLock<Vec<cookie_store::RawCookie<'static>>>>) -> Self {
+        Self { cookies }
+    }
+}
+
+impl CookieStore for MuonCookieStore {
+    fn set(&mut self, cookie: cookie_store::Cookie, _url: &Url) -> CookieStoreSetResult {
+        let mut cookies = self.cookies.write().unwrap();
+        if cookies.iter().all(|c| !c.name().eq_ignore_ascii_case(cookie.name())) {
+            cookies.push(cookie.into_owned().into());
+        }
+        CookieStoreSetResult::Pass
+    }
+
+    fn get(&self, _url: &Url) -> Vec<cookie_store::RawCookie<'_>> {
+        self.cookies.read().unwrap().clone()
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct TokioExecutor;
 
@@ -143,7 +172,7 @@ impl muon::rt::Spawn for TokioExecutor {
 }
 
 #[cfg_attr(feature = "uniffi", uniffi::export)]
-pub fn get_session_fork_selector(app: &str, user: &str, pass: &str) -> String {
+pub fn get_session_fork_selector(app: &str, user: &str, pass: &str) -> ForkSelectorInfo {
     let runtime = tokio::runtime::Builder::new_current_thread()
         .enable_all()
         .build()
@@ -151,14 +180,16 @@ pub fn get_session_fork_selector(app: &str, user: &str, pass: &str) -> String {
     runtime.block_on(get_session_fork_selector_async(app, user, pass))
 }
 
-pub async fn get_session_fork_selector_async(app: &str, user: &str, pass: &str) -> String {
+pub async fn get_session_fork_selector_async(app: &str, user: &str, pass: &str) -> ForkSelectorInfo {
     let app = App::new(app).expect("valid app version");
     let env = muon::Environment::new_prod();
+    let captured = Arc::new(RwLock::new(Vec::new()));
+    let cookie_store = MuonCookieStore::new(captured.clone());
     let session = muon::Client::builder(app.clone(), env)
         .with_operating_system(MyOperatingSystem::default(), rand::rng())
         .with_multi_thread_executor(TokioExecutor)
         .without_persistence::<()>()
-        .without_cookie_store()
+        .with_cookie_store(cookie_store)
         .build()
         .unwrap()
         .new_session_without_credentials(())
@@ -175,7 +206,14 @@ pub async fn get_session_fork_selector_async(app: &str, user: &str, pass: &str) 
         LoginFlow::Failed { reason, .. } => panic!("failed to auth {reason:?}"),
     };
 
-    pvpnclient::util::fork_muon_session(session, app)
+    let selector = pvpnclient::util::fork_muon_session(session, app)
         .await
-        .unwrap()
+        .unwrap();
+    let cookies = Cookies {
+        items: captured.read().unwrap().iter().map(|c| Cookie {
+            name: c.name().to_string(),
+            value: c.value().to_string(),
+        }).collect(),
+    };
+    ForkSelectorInfo { selector, cookies }
 }

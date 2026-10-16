@@ -156,9 +156,32 @@ impl Connection {
     }
 
     #[cfg_attr(feature = "uniffi", uniffi::method)]
-    pub fn provide_api_fork_selector(&self, fork_selector: String) {
-        (self.send_pvpn_message)(PvpnMessage::ProvideApiForkSelector(fork_selector))
+    pub fn provide_api_fork_selector(&self, fork_selector_info: ForkSelectorInfo) {
+        (self.send_pvpn_message)(PvpnMessage::ProvideApiForkSelector(fork_selector_info))
     }
+}
+
+#[cfg(feature = "local-agent")]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
+#[derive(Debug, Clone)]
+pub struct ForkSelectorInfo {
+    pub selector: String,
+    pub cookies: Cookies,
+}
+
+#[cfg(feature = "local-agent")]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
+#[derive(Debug, Clone)]
+pub struct Cookies {
+    pub items: Vec<Cookie>,
+}
+
+#[cfg(feature = "local-agent")]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
+#[derive(Debug, Clone)]
+pub struct Cookie {
+    pub name: String,
+    pub value: String,
 }
 
 #[cfg_attr(feature = "uniffi", derive(uniffi::Record))]

@@ -5,14 +5,14 @@ updates:
     schedule:
       interval: weekly
       day: monday
-    open-pull-requests-limit: 20
+    open-pull-requests-limit: 5
 
   - package-ecosystem: cargo
     directory: /
     schedule:
       interval: weekly
       day: monday
-    open-pull-requests-limit: 20
+    open-pull-requests-limit: 5
     # pvpnclient/muon are resolved from Proton's separate Cargo registry.
     # A private-registry authentication requirement must be configured in
     # Dependabot separately, never embedded in this file.
@@ -22,13 +22,4 @@ updates:
     schedule:
       interval: weekly
       day: monday
-    open-pull-requests-limit: 20
-    # Hilt >= 2.59 requires AGP 9. Keep AGP 8.13 compatibility.
-    # Revisit these bounds together with the next AGP major upgrade.
-    ignore:
-      - dependency-name: "com.google.dagger:hilt-android"
-        versions: ["[2.59,)"]
-      - dependency-name: "com.google.dagger:hilt-compiler"
-        versions: ["[2.59,)"]
-      - dependency-name: "com.google.dagger.hilt.android:com.google.dagger.hilt.android.gradle.plugin"
-        versions: ["[2.59,)"]
+    open-pull-requests-limit: 5

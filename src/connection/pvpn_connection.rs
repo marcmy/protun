@@ -81,7 +81,7 @@ pub(crate) enum PvpnMessage {
     RequestStats,
     Update(ConfigUpdate),
     #[cfg(feature = "local-agent")]
-    ProvideApiForkSelector(String),
+    ProvideApiForkSelector(crate::api::connection::ForkSelectorInfo),
     #[cfg(feature = "local-agent")]
     RequestLocalAgentStats,
 }
@@ -292,9 +292,9 @@ impl PvpnConnection {
                     }
                 }
                 #[cfg(feature = "local-agent")]
-                PvpnMessage::ProvideApiForkSelector(fork_selector) => {
-                    self.client
-                        .push_local_agent(LocalAgentAction::ProvideAuthForkSelector(fork_selector));
+                PvpnMessage::ProvideApiForkSelector(info) => {
+                    self.client.push_local_agent(
+                        LocalAgentAction::ProvideAuthForkSelector(info.selector, info.cookies.into()));
                 }
                 #[cfg(feature = "local-agent")]
                 PvpnMessage::RequestLocalAgentStats => {

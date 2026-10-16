@@ -42,6 +42,8 @@ import me.proton.vpn.core.sample_app.data.ConfigStore
 import me.proton.vpn.core.sample_app.data.VpnConfig
 import me.proton.vpn.core.sample_app.ui.Event.ShowMessage
 import uniffi.protun.getSessionForkSelector
+import me.proton.vpn.core.api.ApiSelectorInfo
+import me.proton.vpn.core.api.ApiSelectorCookie
 import javax.inject.Inject
 
 private const val APP_VERSION = "android-vpn@5.17.62.0"
@@ -100,7 +102,13 @@ class MainViewModel @Inject constructor(
                             val selector = viewModelScope.async(Dispatchers.IO) {
                                 getSessionForkSelector(APP_VERSION, it.username, it.password)
                             }
-                            connectionManager.updateApiSelector(selector.await())
+                            val forkInfo = selector.await()
+                            connectionManager.updateApiSelector(
+                                ApiSelectorInfo(
+                                    forkInfo.selector,
+                                    forkInfo.cookies.items.map { ApiSelectorCookie(it.name, it.value) }
+                                )
+                            )
                         }
 
                     is VpnErrorEvent.LocalAgentSettingPolicyRefused ->

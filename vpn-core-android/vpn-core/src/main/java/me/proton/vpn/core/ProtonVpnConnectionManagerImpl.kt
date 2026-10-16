@@ -42,6 +42,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.shareIn
 import kotlinx.coroutines.launch
+import me.proton.vpn.core.api.ApiSelectorInfo
 import me.proton.vpn.core.api.InitialConfig
 import me.proton.vpn.core.api.InterfaceConfig
 import me.proton.vpn.core.api.LocalAgentSettings
@@ -185,7 +186,7 @@ internal class ProtonVpnConnectionManagerImpl(
         }
     }
 
-    override fun updateApiSelector(selector: String) {
+    override fun updateApiSelector(selector: ApiSelectorInfo) {
         mainScope.launch {
             sendAction(ProTunVpnService.VpnAction.Update.ApiSelector(selector))
         }

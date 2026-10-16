@@ -26,6 +26,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.launch
+import me.proton.vpn.core.api.ApiSelectorInfo
 import me.proton.vpn.core.api.ConnectionMode
 import me.proton.vpn.core.api.InitialConfig
 import me.proton.vpn.core.api.InterfaceConfig
@@ -218,8 +219,15 @@ internal class ConnectionManager(
         )
     }
 
-    fun provideApiForkSelector(selector: String) {
-        activeConnection?.connection?.provideApiForkSelector(selector)
+    fun provideApiForkSelector(info: ApiSelectorInfo) {
+        activeConnection?.connection?.provideApiForkSelector(
+            uniffi.protun.ForkSelectorInfo(
+                info.selector,
+                uniffi.protun.Cookies(
+                    info.cookies.map { uniffi.protun.Cookie(it.name, it.value) }
+                )
+            )
+        )
     }
 
     fun setPacketCaptureEnabled(packetCaptureInfo: PacketCaptureInfo?) {
