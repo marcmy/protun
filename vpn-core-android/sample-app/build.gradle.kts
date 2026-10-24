@@ -65,7 +65,7 @@ dependencies {
     ksp(libs.hilt.compiler)
     implementation(libs.ini4j)
 
-    implementation("androidx.datastore:datastore:1.1.7")
+    implementation("androidx.datastore:datastore:1.3.0")
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.11.0")
 
     testImplementation(libs.junit)
