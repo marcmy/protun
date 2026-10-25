@@ -1,4 +1,14 @@
 version: 2
+# Proton publishes these crates publicly; registering the host allows
+# Dependabot's otherwise restrictive network proxy to reach its Cargo index.
+registries:
+  proton:
+    type: cargo-registry
+    registry: proton
+    url: https://rust-registry.proton.me/index/
+    # Anonymous public registry; Dependabot still requires a token field.
+    # This literal is NOT a secret or credential with access privileges.
+    token: "anonymous"
 updates:
   - package-ecosystem: github-actions
     directory: /
@@ -15,9 +25,10 @@ updates:
       time: "12:00"
       timezone: "America/New_York"
     open-pull-requests-limit: 100
-    # pvpnclient/muon are resolved from Proton's separate Cargo registry.
-    # A private-registry authentication requirement must be configured in
-    # Dependabot separately, never embedded in this file.
+    registries:
+      - proton
+    # If authentication becomes necessary, reference a Dependabot secret
+    # rather than checking a real credential into this file.
 
   - package-ecosystem: gradle
     directory: /vpn-core-android
