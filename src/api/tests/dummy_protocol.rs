@@ -50,10 +50,10 @@ pub(crate) enum DummyProtocolPacket {
 }
 impl DummyProtocolPacket {
     pub(crate) fn serialize(&self) -> Vec<u8> {
-        bincode::serialize(self).unwrap()
+        bincode::serde::encode_to_vec(self, bincode::config::standard()).unwrap()
     }
     pub(crate) fn deserialize(data: &[u8]) -> Self {
-        bincode::deserialize(data).unwrap()
+        bincode::serde::decode_from_slice(data, bincode::config::standard()).unwrap().0
     }
 }
 

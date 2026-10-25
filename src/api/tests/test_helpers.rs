@@ -117,7 +117,7 @@ pub(crate) struct ConnectionTestHelper {
 impl ConnectionTestHelper {
     pub(crate) fn recv_udp(&mut self, socket: &std::net::UdpSocket) -> io::Result<(DummyProtocolPacket, SocketAddr)> {
         let (bytes_read, src) = socket.recv_from(&mut self.buf[..])?;
-        let packet = bincode::deserialize(&self.buf[..bytes_read]).unwrap();
+        let packet = bincode::serde::decode_from_slice(&self.buf[..bytes_read], bincode::config::standard()).unwrap().0;
         Ok((packet, src))
     }
 
@@ -131,12 +131,12 @@ impl ConnectionTestHelper {
 
     pub(crate) fn recv_from_tun(&mut self) -> io::Result<DummyProtocolPacket> {
         let (bytes_read, _) = self.tun_socket.as_ref().unwrap().recv_from(&mut self.buf[..])?;
-        Ok(bincode::deserialize(&self.buf[..bytes_read]).unwrap())
+        Ok(bincode::serde::decode_from_slice(&self.buf[..bytes_read], bincode::config::standard()).unwrap().0)
     }
 
     pub(crate) fn recv_tcp(&mut self, stream: &mut std::net::TcpStream) -> io::Result<DummyProtocolPacket> {
         let bytes_read = stream.read(&mut self.buf[..])?;
-        Ok(bincode::deserialize(&self.buf[..bytes_read]).unwrap())
+        Ok(bincode::serde::decode_from_slice(&self.buf[..bytes_read], bincode::config::standard()).unwrap().0)
     }
 
     pub(crate) fn send_tcp(&mut self, stream: &mut std::net::TcpStream, packet: &DummyProtocolPacket) -> io::Result<usize> {
