@@ -29,6 +29,17 @@ updates:
     open-pull-requests-limit: 100
     registries:
       - proton
+    # Keep blocked/unusable major lines out of routine Dependabot PRs.
+    # bincode 3.0.0 intentionally has compile_error! in its root module.
+    # UniFFI 0.30+ must be tested with the C# uniffi-bindgen-cs target first.
+    # pvpnclient 5.1.0 still uses muon 3.x; muon 5 splits API types.
+    ignore:
+      - dependency-name: "bincode"
+        versions: [">= 3.0.0"]
+      - dependency-name: "uniffi"
+        versions: [">= 0.30.0"]
+      - dependency-name: "muon"
+        versions: [">= 5.0.0"]
     # If authentication becomes necessary, reference a Dependabot secret
     # rather than checking a real credential into this file.
 
