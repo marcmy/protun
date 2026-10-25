@@ -6,7 +6,7 @@ updates:
       interval: "daily"
       time: "12:00"
       timezone: "America/New_York"
-    open-pull-requests-limit: 10
+    open-pull-requests-limit: 100
 
   - package-ecosystem: cargo
     directory: /
@@ -14,7 +14,7 @@ updates:
       interval: "daily"
       time: "12:00"
       timezone: "America/New_York"
-    open-pull-requests-limit: 10
+    open-pull-requests-limit: 100
     # pvpnclient/muon are resolved from Proton's separate Cargo registry.
     # A private-registry authentication requirement must be configured in
     # Dependabot separately, never embedded in this file.
@@ -25,4 +25,4 @@ updates:
       interval: "daily"
       time: "12:00"
       timezone: "America/New_York"
-    open-pull-requests-limit: 10
+    open-pull-requests-limit: 100
