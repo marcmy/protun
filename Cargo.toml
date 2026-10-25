@@ -48,7 +48,7 @@ winreg = { version = "0.56", optional = true }
 wintun = { version = "0.5.1", optional = true }
 
 [dependencies.muon]
-version = "=3.0.0"
+version = "=4.1.0"
 registry = "proton"
 features = ["transport-hyper", "lenient", "other-product", "unsealed"]
 default-features = false
