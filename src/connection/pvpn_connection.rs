@@ -337,8 +337,14 @@ impl PvpnConnection {
             if let Some(action) = self.client.pull() {
                 let (stream_id, kind) = action.into_parts();
                 match kind {
-                    ActionKind::Open(open_stream) =>
-                        self.handle_open(stream_id, &open_stream),
+                    ActionKind::Open { target: open_stream, first_write } => {
+                        self.handle_open(stream_id, &open_stream);
+                        // pvpnclient 5 can attach an initial payload to an open
+                        // request. Forward it rather than silently dropping data.
+                        if let Some(data) = first_write {
+                            self.handle_write(stream_id, data);
+                        }
+                    },
                     ActionKind::Write(vec) =>
                         self.handle_write(stream_id, vec),
                     ActionKind::Set(socket_option) =>
