@@ -180,7 +180,11 @@ impl ConnectionTestHelper {
     }
 
     pub(crate) fn expect_event(&mut self, predicate: impl Fn(&Event) -> bool) -> Event {
-        let max_wait = Duration::from_millis(10);
+        // Events are delivered from a background connection thread. A 10 ms
+        // deadline flakes under CI scheduling pressure even when the event
+        // was emitted correctly; keep a bounded wait without assuming a
+        // particular thread scheduling latency.
+        let max_wait = Duration::from_millis(250);
         let now = Instant::now();
         while now.elapsed() < max_wait {
             let left = max_wait - now.elapsed();
