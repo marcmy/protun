@@ -44,7 +44,7 @@ windows = { version = "0.60", features = [
     "Win32_System_Threading",
     "Win32_System_WindowsProgramming",
 ], optional = true }
-winreg = { version = "0.55", optional = true }
+winreg = { version = "0.56", optional = true }
 wintun = { version = "0.5.1", optional = true }
 
 [dependencies.muon]
