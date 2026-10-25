@@ -7,8 +7,9 @@ registries:
     registry: proton
     url: https://rust-registry.proton.me/index/
     # Public index, but Dependabot requires a secret-backed token setting.
-    # Configure the Dependabot secret PROTON_REGISTRY_READ_TOKEN with an
-    # anonymous placeholder if the registry accepts unauthenticated reads.
+    # PROTON_REGISTRY_READ_TOKEN is stored as a Dependabot secret (not an
+    # Actions secret). Its value is a nonprivileged placeholder for this
+    # publicly readable registry.
     token: "${{secrets.PROTON_REGISTRY_READ_TOKEN}}"
 updates:
   - package-ecosystem: github-actions
