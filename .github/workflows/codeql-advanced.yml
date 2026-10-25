@@ -1,0 +1,112 @@
+# This workflow is intended for CodeQL ADVANCED setup. GitHub's default
+# setup cannot supply the custom Rust/UniFFI/Android build required by Kotlin.
+# When activating, switch CodeQL to advanced setup in repository settings.
+name: CodeQL (advanced)
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+  schedule:
+    - cron: "30 3 * * 3"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+  security-events: write
+
+jobs:
+  analyze:
+    name: Analyze (${{ matrix.language }})
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - language: actions
+            build-mode: none
+          - language: rust
+            build-mode: none
+          - language: java-kotlin
+            build-mode: manual
+    env:
+      ORG_GRADLE_PROJECT_protunCoreVersionName: 0.1.0-ci
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+
+      - name: Set up JDK 17 for Kotlin
+        if: matrix.language == 'java-kotlin'
+        uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Install Android SDK and NDK for Kotlin
+        if: matrix.language == 'java-kotlin'
+        shell: bash
+        run: |
+          SDK_ROOT="${ANDROID_HOME:-/usr/local/lib/android/sdk}"
+          SDKMANAGER="$(find "$SDK_ROOT/cmdline-tools" -maxdepth 3 -type f -name sdkmanager | sort -V | tail -n 1)"
+          test -n "$SDKMANAGER" || { echo "::error::Android sdkmanager missing"; exit 1; }
+          yes | "$SDKMANAGER" --licenses > /dev/null || true
+          "$SDKMANAGER" --install "ndk;28.1.13356709" "platforms;android-37.0" "build-tools;36.0.0"
+          test -d "$SDK_ROOT/platforms/android-37.0"
+          if [ ! -e "$SDK_ROOT/platforms/android-37" ]; then
+            ln -s android-37.0 "$SDK_ROOT/platforms/android-37"
+          fi
+
+      - name: Install Android ARM64 Rust target for Kotlin bindings
+        if: matrix.language == 'java-kotlin'
+        run: rustup target add aarch64-linux-android
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v4
+        with:
+          languages: ${{ matrix.language }}
+          build-mode: ${{ matrix.build-mode }}
+
+      - name: Compile native library for Kotlin binding generation
+        if: matrix.language == 'java-kotlin'
+        shell: bash
+        run: |
+          NDK_ROOT="${ANDROID_HOME:-/usr/local/lib/android/sdk}/ndk/28.1.13356709"
+          BIN="$NDK_ROOT/toolchains/llvm/prebuilt/linux-x86_64/bin"
+          export CC_aarch64_linux_android="$BIN/aarch64-linux-android25-clang"
+          export AR_aarch64_linux_android="$BIN/llvm-ar"
+          export CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER="$BIN/aarch64-linux-android25-clang"
+          test -x "$CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER"
+          cargo build --release --target aarch64-linux-android --features android,uniffi,test_utils
+          test -s target/aarch64-linux-android/release/libprotun.so
+
+      - name: Generate UniFFI Kotlin bindings
+        if: matrix.language == 'java-kotlin'
+        shell: bash
+        run: |
+          cargo run --release --features uniffi --bin uniffi-bindgen -- \
+            generate --library target/aarch64-linux-android/release/libprotun.so \
+            --language kotlin --config uniffi.toml \
+            --out-dir vpn-core-android/vpn-core-rust/build/generated/uniffi/java
+          test -d vpn-core-android/vpn-core-rust/build/generated/uniffi/java/uniffi/protun
+
+      - name: Compile Kotlin source under CodeQL tracing
+        if: matrix.language == 'java-kotlin'
+        working-directory: vpn-core-android
+        shell: bash
+        run: |
+          chmod +x ./gradlew
+          ./gradlew --no-daemon :sample-app:compileDebugKotlin \
+            -x :vpn-core-rust:cargoBuild \
+            -x :vpn-core-rust:generateUniFFIBindings
+
+      - name: Analyze and upload CodeQL results
+        uses: github/codeql-action/analyze@v4
+        with:
+          category: "/language:${{ matrix.language }}"
