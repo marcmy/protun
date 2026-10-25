@@ -32,14 +32,14 @@ updates:
     # Keep blocked/unusable major lines out of routine Dependabot PRs.
     # bincode 3.0.0 intentionally has compile_error! in its root module.
     # UniFFI >=0.32 is ahead of C# uniffi-bindgen-cs (currently 0.31).
-    # pvpnclient 5.1.0 still uses muon 3.x; muon 5 splits API types.
+    # pvpnclient 5.1.0 still uses muon 3.x; muon 4+ splits API types.
     ignore:
       - dependency-name: "bincode"
         versions: [">= 3.0.0"]
       - dependency-name: "uniffi"
         versions: [">= 0.32.0"]
       - dependency-name: "muon"
-        versions: [">= 5.0.0"]
+        versions: [">= 4.0.0"]
     # If authentication becomes necessary, reference a Dependabot secret
     # rather than checking a real credential into this file.
 
