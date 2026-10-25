@@ -6,9 +6,7 @@ registries:
     type: cargo-registry
     registry: proton
     url: https://rust-registry.proton.me/index/
-    # Anonymous public registry; Dependabot still requires a token field.
-    # This literal is NOT a secret or credential with access privileges.
-    token: "anonymous"
+    # Public, read-only sparse registry: no authentication is required.
 updates:
   - package-ecosystem: github-actions
     directory: /
