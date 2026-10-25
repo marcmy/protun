@@ -13,7 +13,7 @@ panic = "abort"
 panic = "abort"
 
 [dependencies]
-base64 = { version = "0.22", default-features = false, features = ["alloc"], optional = true }
+base64 = { version = "0.23", default-features = false, features = ["alloc"], optional = true }
 libc = { version = "0.2.180", optional = true }
 log = "0.4.29"
 mio = { version = "1.1.1", features = ["net", "os-poll", "os-ext"], optional = true }
