@@ -35,7 +35,7 @@ updates:
     # pvpnclient 5.1.0 still uses muon 3.x; muon 4+ splits API types.
     ignore:
       - dependency-name: "bincode"
-        versions: [">= 3.0.0"]
+        versions: ["3.0.0"]
       - dependency-name: "uniffi"
         versions: [">= 0.32.0"]
       - dependency-name: "muon"
