@@ -19,6 +19,8 @@ updates:
       time: "12:00"
       timezone: "America/New_York"
     open-pull-requests-limit: 100
+    cooldown:
+      default-days: 7
 
   - package-ecosystem: cargo
     directory: /
@@ -27,6 +29,8 @@ updates:
       time: "12:00"
       timezone: "America/New_York"
     open-pull-requests-limit: 100
+    cooldown:
+      default-days: 7
     registries:
       - proton
     # Keep blocked/unusable major lines out of routine Dependabot PRs.
@@ -50,3 +54,5 @@ updates:
       time: "12:00"
       timezone: "America/New_York"
     open-pull-requests-limit: 100
+    cooldown:
+      default-days: 7
