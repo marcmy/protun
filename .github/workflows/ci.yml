@@ -45,7 +45,7 @@ jobs:
         shell: bash
         run: |
           cargo metadata --format-version 1 | jq -e '[.packages[] | select(.name == "proton-os-interface")] | length == 1' >/dev/null
-          cargo tree -i 'proton-os-interface@0.3.5'
+          cargo tree -i 'proton-os-interface@0.3.6'
       - name: Compile all Rust targets (required)
         shell: bash
         run: |
